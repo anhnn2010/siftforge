@@ -12,7 +12,9 @@ license = {text = "MIT"}
 authors = [
   {name = "SiftForge contributors"}
 ]
-dependencies = []
+dependencies = [
+  "pypdf>=5.0"
+]
 
 [project.optional-dependencies]
 dev = [

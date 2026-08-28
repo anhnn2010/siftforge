@@ -51,3 +51,15 @@ Book model
   ↓
 EPUB renderer
 ```
+
+## Milestone 1A - PDF source discovery
+
+The first real fixture is a vFlat-exported scanned book PDF. `PDFSource` now:
+
+- analyzes a PDF without ebook-specific assumptions;
+- exposes every page as an independent `SourceRef`;
+- records document/page hashes and provenance metadata;
+- distinguishes native-text, image-only, mixed, and blank pages.
+
+The first fixture is entirely image-only, so the next step is to materialize each
+page image without making the AI provider understand PDF internals.

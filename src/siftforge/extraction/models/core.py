@@ -27,6 +27,7 @@ class SourceRef:
     uri: str
     sha256: str | None = None
     media_type: str | None = None
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True, slots=True)
