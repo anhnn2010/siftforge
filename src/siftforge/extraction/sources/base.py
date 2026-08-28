@@ -1,3 +1,5 @@
+"""Protocols implemented by source-discovery components."""
+
 from __future__ import annotations
 
 from collections.abc import Iterable
@@ -7,7 +9,8 @@ from siftforge.extraction.models import SourceRef
 
 
 class Source(Protocol):
-    """Produces generic source references for extraction tasks."""
+    """Discover logical source items without performing extraction."""
 
     def iter_items(self) -> Iterable[SourceRef]:
+        """Yield independently processable source references."""
         ...

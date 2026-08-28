@@ -9,18 +9,11 @@ description = "Reusable Python data extraction pipeline with validation, fallbac
 readme = "README.md"
 requires-python = ">=3.12"
 license = {text = "MIT"}
-authors = [
-  {name = "SiftForge contributors"}
-]
-dependencies = [
-  "pypdf>=5.0"
-]
+authors = [{name = "SiftForge contributors"}]
+dependencies = ["pypdf>=5.0"]
 
 [project.optional-dependencies]
-dev = [
-  "pytest>=8.0",
-  "ruff>=0.6"
-]
+dev = ["pytest>=8.0", "ruff>=0.6"]
 
 [tool.setuptools.packages.find]
 where = ["src"]
@@ -34,4 +27,8 @@ line-length = 88
 target-version = "py312"
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "UP", "B"]
+select = ["ANN", "B", "D", "E", "F", "I", "UP"]
+ignore = ["ANN401"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"

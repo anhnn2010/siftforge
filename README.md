@@ -13,13 +13,15 @@ The first real application is scanned-book/PDF → structured book → EPUB.
 4. Important stages produce inspectable artifacts.
 5. `extraction` works with generic tasks/results, not `Book`/`Chapter`/`EPUB`.
 6. Add abstractions from real use cases; do not build a framework in advance.
+7. Python code uses complete type annotations and clear docstrings.
 
-## Initial architecture
+## Current architecture
 
 ```text
 src/siftforge/
 ├── extraction/
 │   ├── artifacts/
+│   ├── materializers/
 │   ├── models/
 │   ├── providers/
 │   ├── runtime/
@@ -31,35 +33,41 @@ src/siftforge/
     └── renderers/
 ```
 
-## Milestone 0
-
-This repository currently contains only the architectural skeleton and
-contract tests. The first vertical slice will use a real vFlat-exported PDF:
-
-```text
-PDFSource
-  ↓
-ExtractionTask
-  ↓
-Extractor / Provider
-  ↓
-Normalizer
-  ↓
-Validator
-  ↓
-Book model
-  ↓
-EPUB renderer
-```
-
 ## Milestone 1A - PDF source discovery
 
-The first real fixture is a vFlat-exported scanned book PDF. `PDFSource` now:
+`PDFSource`:
 
 - analyzes a PDF without ebook-specific assumptions;
 - exposes every page as an independent `SourceRef`;
 - records document/page hashes and provenance metadata;
-- distinguishes native-text, image-only, mixed, and blank pages.
+- distinguishes native-text, image-only, mixed, and blank pages;
+- inspects embedded image streams without rendering the page.
 
-The first fixture is entirely image-only, so the next step is to materialize each
-page image without making the AI provider understand PDF internals.
+The first real vFlat fixture contains 432 image-only pages, with exactly one
+`/DCTDecode` JPEG image stream per page.
+
+## Milestone 1B - Source materialization
+
+`PDFPageMaterializer` converts a logical PDF-page `SourceRef` into a local
+`MaterializedAsset`.
+
+For the current vFlat fixture it extracts the original encoded JPEG bytes directly
+from the PDF instead of rendering the page or using a higher-level image helper
+that may decode/re-encode the image.
+
+```text
+PDFSource
+  ↓
+SourceRef
+  ↓
+PDFPageMaterializer
+  ↓
+MaterializedAsset (original JPEG)
+  ↓
+ExtractionTask
+  ↓
+Provider / OCR / AI
+```
+
+The materializer is PDF-specific while the resulting asset is generic. Downstream
+providers therefore do not need to know that the image originally lived in a PDF.

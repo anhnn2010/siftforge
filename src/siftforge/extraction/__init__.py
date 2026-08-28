@@ -1,1 +1,1 @@
-"""Generic acquisition and extraction primitives."""
+"""Generic acquisition, extraction, validation, and runtime primitives."""

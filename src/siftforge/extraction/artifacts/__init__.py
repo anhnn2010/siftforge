@@ -1,3 +1,5 @@
+"""Artifact-storage interfaces."""
+
 from .base import ArtifactStore
 
-__all__ = ["ArtifactStore"]
+__all__: list[str] = ["ArtifactStore"]

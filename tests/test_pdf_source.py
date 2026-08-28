@@ -1,3 +1,5 @@
+"""Tests for PDF source discovery."""
+
 from pathlib import Path
 
 from pypdf import PdfWriter
@@ -5,7 +7,8 @@ from pypdf import PdfWriter
 from siftforge.extraction.sources import PDFSource
 
 
-def _make_fixture(path: Path) -> None:
+def _make_blank_fixture(path: Path) -> None:
+    """Create a two-page blank PDF fixture."""
     writer = PdfWriter()
     writer.add_blank_page(width=300, height=400)
     writer.add_blank_page(width=320, height=400)
@@ -14,8 +17,9 @@ def _make_fixture(path: Path) -> None:
 
 
 def test_pdf_source_analyzes_and_yields_independent_pages(tmp_path: Path) -> None:
+    """PDFSource should classify and identify pages independently."""
     pdf_path = tmp_path / "fixture.pdf"
-    _make_fixture(pdf_path)
+    _make_blank_fixture(pdf_path)
 
     source = PDFSource(pdf_path)
     analysis = source.analyze()
