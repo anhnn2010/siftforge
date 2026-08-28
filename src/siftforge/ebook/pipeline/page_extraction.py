@@ -1,4 +1,4 @@
-"""One-page PDF-to-structured-data application service for ebook extraction."""
+"""One-page PDF-to-typed-content application service for ebook extraction."""
 
 from __future__ import annotations
 
@@ -6,7 +6,12 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from siftforge.ebook.extraction import EBOOK_PAGE_PROMPT, EBOOK_PAGE_SCHEMA
+from siftforge.ebook.extraction import (
+    EBOOK_PAGE_PROMPT,
+    EBOOK_PAGE_SCHEMA,
+    EbookPageNormalizer,
+)
+from siftforge.ebook.models import PageContent
 from siftforge.extraction.artifacts import FilesystemArtifactStore
 from siftforge.extraction.materializers import PDFPageMaterializer
 from siftforge.extraction.models import (
@@ -21,27 +26,31 @@ from siftforge.extraction.sources import PDFSource
 
 @dataclass(frozen=True, slots=True)
 class EbookPageExtractionRun:
-    """Artifacts and result produced by one ebook page extraction run."""
+    """Artifacts and typed result produced by one ebook page extraction run."""
 
     source: SourceRef
     asset: MaterializedAsset
-    result: ExtractionResult
+    extraction: ExtractionResult
+    page_content: PageContent
     run_dir: Path
 
 
 class EbookPDFPageExtractionService:
-    """Orchestrate the first real ebook extraction vertical slice.
-
-    This service owns ebook/PDF application wiring but delegates generic work to
-    source, materializer, provider, and artifact components.
+    """Orchestrate one PDF-page extraction through the typed ebook boundary.
 
     Args:
         extractor: Provider-compatible extraction mechanism selected by the caller.
+        normalizer: Optional ebook-domain normalizer for structured provider output.
     """
 
-    def __init__(self, extractor: Extractor) -> None:
-        """Initialize the service with one externally selected extractor."""
+    def __init__(
+        self,
+        extractor: Extractor,
+        normalizer: EbookPageNormalizer | None = None,
+    ) -> None:
+        """Initialize the service with externally selected extraction components."""
         self._extractor: Extractor = extractor
+        self._normalizer: EbookPageNormalizer = normalizer or EbookPageNormalizer()
 
     def extract_page(
         self,
@@ -49,7 +58,7 @@ class EbookPDFPageExtractionService:
         page_number: int,
         run_dir: str | Path,
     ) -> EbookPageExtractionRun:
-        """Extract one physical PDF page into structured ebook page content.
+        """Extract one physical PDF page into validated typed ebook content.
 
         Args:
             pdf_path: Input PDF containing the scanned book.
@@ -57,10 +66,12 @@ class EbookPDFPageExtractionService:
             run_dir: Directory used for materialized assets and run artifacts.
 
         Returns:
-            Complete one-page extraction run.
+            Complete one-page extraction run including typed page content.
 
         Raises:
             ValueError: If `page_number` is outside the PDF.
+            EbookPageNormalizationError: If provider output violates the ebook
+                domain contract.
         """
         if page_number < 1:
             raise ValueError("page number must be greater than or equal to 1")
@@ -81,19 +92,25 @@ class EbookPDFPageExtractionService:
             assets=(asset,),
             metadata={"application": "ebook"},
         )
-        result = self._extractor.extract(task)
+        extraction = self._extractor.extract(task)
+        page_content = self._normalizer.normalize(
+            page_id=source_ref.source_id,
+            payload=extraction.normalized_data,
+        )
 
         self._write_artifacts(
             store=artifact_store,
             source=source_ref,
             asset=asset,
-            result=result,
+            extraction=extraction,
+            page_content=page_content,
         )
 
         return EbookPageExtractionRun(
             source=source_ref,
             asset=asset,
-            result=result,
+            extraction=extraction,
+            page_content=page_content,
             run_dir=run_path,
         )
 
@@ -108,28 +125,25 @@ class EbookPDFPageExtractionService:
             f"page {page_number} is outside PDF {pdf_source.path.name!r}"
         )
 
-    @staticmethod
     def _write_artifacts(
+        self,
         store: FilesystemArtifactStore,
         source: SourceRef,
         asset: MaterializedAsset,
-        result: ExtractionResult,
+        extraction: ExtractionResult,
+        page_content: PageContent,
     ) -> None:
-        """Persist provenance, raw provider output, and normalized page data."""
+        """Persist provenance, raw output, and typed normalized page content."""
         raw_text = (
-            result.raw_data
-            if isinstance(result.raw_data, str)
-            else str(result.raw_data)
+            extraction.raw_data
+            if isinstance(extraction.raw_data, str)
+            else str(extraction.raw_data)
         )
         store.write_text("raw/provider-response.json", raw_text)
-
-        if isinstance(result.normalized_data, (dict, list)):
-            store.write_json("normalized/page.json", result.normalized_data)
-        else:
-            store.write_json(
-                "normalized/page.json",
-                {"value": result.normalized_data},
-            )
+        store.write_json(
+            "normalized/page.json",
+            self._normalizer.to_dict(page_content),
+        )
 
         manifest: dict[str, Any] = {
             "source": {
@@ -150,12 +164,16 @@ class EbookPDFPageExtractionService:
                 ),
             },
             "prompt": {
-                "name": result.task.prompt.name,
-                "version": result.task.prompt.version,
+                "name": extraction.task.prompt.name,
+                "version": extraction.task.prompt.version,
             },
             "schema": {
-                "name": result.task.schema.name,
-                "version": result.task.schema.version,
+                "name": extraction.task.schema.name,
+                "version": extraction.task.schema.version,
+            },
+            "normalization": {
+                "model": "PageContent",
+                "status": "success",
             },
             "attempts": [
                 {
@@ -165,7 +183,7 @@ class EbookPDFPageExtractionService:
                     "reason": attempt.reason,
                     "metadata": attempt.metadata,
                 }
-                for attempt in result.attempts
+                for attempt in extraction.attempts
             ],
         }
         store.write_json("manifest.json", manifest)

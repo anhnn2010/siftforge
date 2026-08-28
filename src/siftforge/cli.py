@@ -8,6 +8,7 @@ import sys
 from collections.abc import Sequence
 from pathlib import Path
 
+from siftforge.ebook.extraction import EbookPageNormalizationError
 from siftforge.ebook.pipeline import EbookPDFPageExtractionService
 from siftforge.extraction.materializers import PDFPageMaterializationError
 from siftforge.extraction.providers import (
@@ -56,9 +57,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--run-dir",
         type=Path,
         default=None,
-        help=(
-            "Artifact directory. Defaults to runs/<pdf-stem>/page-NNNN."
-        ),
+        help="Artifact directory. Defaults to runs/<pdf-stem>/page-NNNN.",
     )
     return parser
 
@@ -122,6 +121,7 @@ def _run_ebook_extract_page(args: argparse.Namespace) -> int:
         ValueError,
         PDFPageMaterializationError,
         GeminiProviderError,
+        EbookPageNormalizationError,
     ) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
@@ -129,7 +129,9 @@ def _run_ebook_extract_page(args: argparse.Namespace) -> int:
     print(f"source: {run.source.source_id}")
     print(f"asset:  {run.asset.path}")
     print(f"run:    {run.run_dir}")
-    print("result: structured response saved to normalized/page.json")
+    print(f"kind:   {run.page_content.page_kind.value}")
+    print(f"blocks: {len(run.page_content.blocks)}")
+    print("result: typed page content saved to normalized/page.json")
     return 0
 
 

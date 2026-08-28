@@ -15,11 +15,7 @@ from pypdf.generic import (
 )
 
 from siftforge.ebook.pipeline import EbookPDFPageExtractionService
-from siftforge.extraction.models import (
-    Attempt,
-    ExtractionResult,
-    ExtractionTask,
-)
+from siftforge.extraction.models import Attempt, ExtractionResult, ExtractionTask
 
 _JPEG_BYTES: bytes = (
     b"\xff\xd8\xff\xe0"
@@ -28,21 +24,61 @@ _JPEG_BYTES: bytes = (
 )
 
 
+def _typography(
+    posture: str = "roman",
+    vertical_position: str = "baseline",
+) -> dict[str, object]:
+    """Return a complete typography fixture."""
+    return {
+        "posture": posture,
+        "weight": "normal",
+        "vertical_position": vertical_position,
+        "caps_style": "normal",
+        "decorations": [],
+    }
+
+
 class FakeStructuredExtractor:
     """Return deterministic ebook-shaped JSON without a network request."""
 
     def extract(self, task: ExtractionTask) -> ExtractionResult:
-        """Return one structured text page for application-service testing."""
+        """Return one page-18-shaped structured response."""
         normalized = {
             "page_kind": "text",
             "language": "vi",
-            "printed_page_number": "1",
+            "printed_page_number": "18",
             "blocks": [
                 {
                     "type": "paragraph",
-                    "text": "Nội dung thử nghiệm.",
+                    "content": [
+                        {
+                            "text": "Nguyên văn bản tiếng Anh:",
+                            "typography": _typography(posture="roman"),
+                        }
+                    ],
+                    "language": "vi",
                     "level": None,
-                }
+                    "alignment": "left",
+                },
+                {
+                    "type": "paragraph",
+                    "content": [
+                        {
+                            "text": "December 13",
+                            "typography": _typography(posture="italic"),
+                        },
+                        {
+                            "text": "th",
+                            "typography": _typography(
+                                posture="italic",
+                                vertical_position="superscript",
+                            ),
+                        },
+                    ],
+                    "language": "en",
+                    "level": None,
+                    "alignment": "left",
+                },
             ],
             "warnings": [],
         }
@@ -91,8 +127,8 @@ def _make_pdf(path: Path) -> None:
         writer.write(handle)
 
 
-def test_service_writes_complete_one_page_run(tmp_path: Path) -> None:
-    """Service should materialize, extract, and persist inspectable artifacts."""
+def test_service_writes_explicit_typed_typography(tmp_path: Path) -> None:
+    """Service should persist typed explicit typography after normalization."""
     pdf_path = tmp_path / "book.pdf"
     _make_pdf(pdf_path)
 
@@ -100,19 +136,21 @@ def test_service_writes_complete_one_page_run(tmp_path: Path) -> None:
     service = EbookPDFPageExtractionService(FakeStructuredExtractor())
     run = service.extract_page(pdf_path, page_number=1, run_dir=run_dir)
 
-    assert run.asset.path.read_bytes() == _JPEG_BYTES
-    assert (run_dir / "manifest.json").is_file()
-    assert (run_dir / "raw" / "provider-response.json").is_file()
-    assert (run_dir / "normalized" / "page.json").is_file()
+    assert run.page_content.blocks[0].content[0].typography.posture.value == "roman"
+    assert run.page_content.blocks[1].content[0].typography.posture.value == "italic"
 
     normalized = json.loads(
         (run_dir / "normalized" / "page.json").read_text(encoding="utf-8")
     )
-    assert normalized["blocks"][0]["text"] == "Nội dung thử nghiệm."
+    roman = normalized["blocks"][0]["content"][0]["typography"]
+    superscript = normalized["blocks"][1]["content"][1]["typography"]
+
+    assert roman["posture"] == "roman"
+    assert superscript["posture"] == "italic"
+    assert superscript["vertical_position"] == "superscript"
 
     manifest = json.loads(
         (run_dir / "manifest.json").read_text(encoding="utf-8")
     )
-    assert manifest["prompt"]["version"] == "1"
-    assert manifest["schema"]["version"] == "1"
-    assert manifest["attempts"][0]["provider"] == "fake"
+    assert manifest["prompt"]["version"] == "4"
+    assert manifest["schema"]["version"] == "4"

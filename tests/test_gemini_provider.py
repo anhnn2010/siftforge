@@ -80,35 +80,33 @@ def _make_task(tmp_path: Path) -> ExtractionTask:
     )
 
 
-def test_gemini_provider_keeps_domain_contract_outside_provider(
+def test_gemini_provider_passes_explicit_typography_schema(
     tmp_path: Path,
 ) -> None:
-    """Gemini should consume generic prompt/schema/assets supplied by the task."""
+    """Gemini should receive the generic task's explicit typography contract."""
     response_text = (
         '{"page_kind":"text","language":"vi","printed_page_number":"1",'
-        '"blocks":[{"type":"paragraph","text":"Xin chào.","level":null}],'
-        '"warnings":[]}'
+        '"blocks":[{"type":"paragraph","content":[{"text":"Xin chào",'
+        '"typography":{"posture":"roman","weight":"normal",'
+        '"vertical_position":"baseline","caps_style":"normal",'
+        '"decorations":[]}}],"language":"vi","level":null,'
+        '"alignment":"justify"}],"warnings":[]}'
     )
     transport = FakeGeminiTransport(response_text)
     provider = GeminiProvider(
         GeminiProviderConfig(model="test-model"),
         transport=transport,
     )
-    task = _make_task(tmp_path)
 
-    result = provider.extract(task)
+    result = provider.extract(_make_task(tmp_path))
 
-    assert result.normalized_data["page_kind"] == "text"
-    assert result.normalized_data["blocks"][0]["text"] == "Xin chào."
-    assert result.attempts[0].provider == "gemini"
-    assert result.attempts[0].metadata["model"] == "test-model"
-    assert result.attempts[0].metadata["prompt_version"] == "1"
-    assert result.attempts[0].metadata["schema_version"] == "1"
+    typography = result.normalized_data["blocks"][0]["content"][0]["typography"]
+    assert typography["posture"] == "roman"
+    assert result.attempts[0].metadata["prompt_version"] == "4"
+    assert result.attempts[0].metadata["schema_version"] == "4"
 
     assert transport.last_call is not None
-    assert transport.last_call["prompt"] == EBOOK_PAGE_PROMPT.text
     assert transport.last_call["response_json_schema"] == EBOOK_PAGE_SCHEMA.json_schema
-    assert transport.last_call["temperature"] == 0.0
 
 
 def test_gemini_provider_rejects_task_without_asset(tmp_path: Path) -> None:

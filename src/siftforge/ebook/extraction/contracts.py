@@ -6,26 +6,100 @@ from siftforge.extraction.models import ExtractionSchema, PromptSpec
 
 EBOOK_PAGE_PROMPT = PromptSpec(
     name="ebook_page_transcription",
-    version="1",
+    version="4",
     text="""Transcribe this scanned book page faithfully.
 
-Rules:
+Content fidelity:
 - Do not summarize, translate, modernize, rewrite, or improve the author's text.
-- Preserve Vietnamese diacritics, punctuation, numbers, and meaningful reading order.
+- Preserve Vietnamese diacritics, punctuation, numbers, letter case, and meaningful
+  reading order.
 - Reconstruct paragraphs semantically; do not preserve arbitrary scan line wrapping.
+- If any content is unclear, do not invent missing words. Transcribe only what can be
+  supported by the image and add a concise warning describing the uncertainty.
+
+Semantic structure:
 - Classify visible content into semantic blocks.
 - Separate probable running headers, running footers, and printed page numbers instead
   of silently deleting them.
 - Record a visible printed page number separately when present.
-- If any content is unclear, do not invent missing words. Transcribe only what can be
-  supported by the image and add a concise warning describing the uncertainty.
-- Decorative artwork without meaningful text does not need invented descriptions.
+- Use an image block to record a meaningful illustration, photograph, or diagram when
+  present. Its content may be empty; do not invent a visual description.
+- Put visible image captions in a separate image_caption block.
+
+Language:
+- Set the page language to the dominant visible language when confidently known.
+- Set each textual block's language independently so mixed-language pages remain
+  representable.
+- Prefer lowercase ISO 639-1 language codes such as "vi" or "en" when applicable.
+- Use null when the language is not meaningful or cannot be determined confidently.
+
+Semantic typography:
+- Every text span MUST explicitly classify posture, weight, vertical position, and
+  caps style from the visible glyphs in that span.
+- posture is roman, italic, or unknown.
+- weight is normal, bold, or unknown.
+- vertical_position is baseline, superscript, subscript, or unknown.
+- caps_style is normal, small_caps, or unknown.
+- decorations may contain underline when visibly present.
+- Preserve uppercase/lowercase directly in span text. Uppercase text by itself is not
+  small caps.
+- Do not infer a style from neighboring lines, surrounding paragraphs, document
+  context, expected typography, or semantic role.
+- In particular, a plain roman label immediately before or after italic text must
+  remain roman when its own glyphs are upright.
+- Use unknown for a typography dimension when visual evidence is genuinely
+  insufficient. Do not guess.
+- When a typography dimension is unknown, add a concise page warning identifying the
+  affected text when practical.
+- Use multiple spans when typography changes inside one block.
+- Record block alignment only when left/center/right/justify alignment is visually
+  clear and meaningful.
+- Do not preserve exact font family, font size, paper margins, pixel coordinates, or
+  line breaks caused only by the printed page width.
 """,
 )
 
+_TYPOGRAPHY_SCHEMA = {
+    "type": "object",
+    "additionalProperties": False,
+    "required": [
+        "posture",
+        "weight",
+        "vertical_position",
+        "caps_style",
+        "decorations",
+    ],
+    "properties": {
+        "posture": {
+            "type": "string",
+            "enum": ["roman", "italic", "unknown"],
+        },
+        "weight": {
+            "type": "string",
+            "enum": ["normal", "bold", "unknown"],
+        },
+        "vertical_position": {
+            "type": "string",
+            "enum": ["baseline", "superscript", "subscript", "unknown"],
+        },
+        "caps_style": {
+            "type": "string",
+            "enum": ["normal", "small_caps", "unknown"],
+        },
+        "decorations": {
+            "type": "array",
+            "uniqueItems": True,
+            "items": {
+                "type": "string",
+                "enum": ["underline"],
+            },
+        },
+    },
+}
+
 EBOOK_PAGE_SCHEMA = ExtractionSchema(
     name="ebook_page_content",
-    version="1",
+    version="4",
     json_schema={
         "type": "object",
         "additionalProperties": False,
@@ -50,28 +124,25 @@ EBOOK_PAGE_SCHEMA = ExtractionSchema(
                     "blank",
                     "other",
                 ],
-                "description": "Primary semantic role of this scanned page.",
             },
             "language": {
-                "anyOf": [
-                    {"type": "string"},
-                    {"type": "null"},
-                ],
-                "description": "Main visible language code when confidently known.",
+                "anyOf": [{"type": "string"}, {"type": "null"}],
             },
             "printed_page_number": {
-                "anyOf": [
-                    {"type": "string"},
-                    {"type": "null"},
-                ],
-                "description": "Page number visibly printed on the physical page.",
+                "anyOf": [{"type": "string"}, {"type": "null"}],
             },
             "blocks": {
                 "type": "array",
                 "items": {
                     "type": "object",
                     "additionalProperties": False,
-                    "required": ["type", "text", "level"],
+                    "required": [
+                        "type",
+                        "content",
+                        "language",
+                        "level",
+                        "alignment",
+                    ],
                     "properties": {
                         "type": {
                             "type": "string",
@@ -80,6 +151,7 @@ EBOOK_PAGE_SCHEMA = ExtractionSchema(
                                 "paragraph",
                                 "quote",
                                 "list",
+                                "image",
                                 "image_caption",
                                 "footnote",
                                 "table",
@@ -89,11 +161,20 @@ EBOOK_PAGE_SCHEMA = ExtractionSchema(
                                 "other",
                             ],
                         },
-                        "text": {
-                            "type": "string",
-                            "description": (
-                                "Faithful text content in semantic reading order."
-                            ),
+                        "content": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "additionalProperties": False,
+                                "required": ["text", "typography"],
+                                "properties": {
+                                    "text": {"type": "string"},
+                                    "typography": _TYPOGRAPHY_SCHEMA,
+                                },
+                            },
+                        },
+                        "language": {
+                            "anyOf": [{"type": "string"}, {"type": "null"}],
                         },
                         "level": {
                             "anyOf": [
@@ -104,9 +185,20 @@ EBOOK_PAGE_SCHEMA = ExtractionSchema(
                                 },
                                 {"type": "null"},
                             ],
-                            "description": (
-                                "Heading level when applicable; otherwise null."
-                            ),
+                        },
+                        "alignment": {
+                            "anyOf": [
+                                {
+                                    "type": "string",
+                                    "enum": [
+                                        "left",
+                                        "center",
+                                        "right",
+                                        "justify",
+                                    ],
+                                },
+                                {"type": "null"},
+                            ],
                         },
                     },
                 },
@@ -114,9 +206,6 @@ EBOOK_PAGE_SCHEMA = ExtractionSchema(
             "warnings": {
                 "type": "array",
                 "items": {"type": "string"},
-                "description": (
-                    "Uncertainty or visibly unreadable/ambiguous source content."
-                ),
             },
         },
     },
