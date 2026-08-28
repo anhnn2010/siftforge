@@ -53,11 +53,17 @@ EBOOK_PAGE_SCHEMA = ExtractionSchema(
                 "description": "Primary semantic role of this scanned page.",
             },
             "language": {
-                "type": ["string", "null"],
+                "anyOf": [
+                    {"type": "string"},
+                    {"type": "null"},
+                ],
                 "description": "Main visible language code when confidently known.",
             },
             "printed_page_number": {
-                "type": ["string", "null"],
+                "anyOf": [
+                    {"type": "string"},
+                    {"type": "null"},
+                ],
                 "description": "Page number visibly printed on the physical page.",
             },
             "blocks": {
@@ -90,9 +96,14 @@ EBOOK_PAGE_SCHEMA = ExtractionSchema(
                             ),
                         },
                         "level": {
-                            "type": ["integer", "null"],
-                            "minimum": 1,
-                            "maximum": 6,
+                            "anyOf": [
+                                {
+                                    "type": "integer",
+                                    "minimum": 1,
+                                    "maximum": 6,
+                                },
+                                {"type": "null"},
+                            ],
                             "description": (
                                 "Heading level when applicable; otherwise null."
                             ),

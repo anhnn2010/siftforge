@@ -23,6 +23,9 @@ gemini = [
     "google-genai>=1,<2",
 ]
 
+[project.scripts]
+siftforge = "siftforge.cli:main"
+
 [tool.setuptools.packages.find]
 where = ["src"]
 

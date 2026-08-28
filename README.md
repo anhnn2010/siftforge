@@ -10,11 +10,6 @@ The first real application is scanned-book/PDF → structured book → EPUB.
 SiftForge currently targets **Python 3.12.x**, with **Python 3.12.3** as the
 official local-development and CI baseline.
 
-```bash
-python --version
-# Python 3.12.3
-```
-
 ## Design rules
 
 1. Domain code must not depend on a specific AI/OCR provider.
@@ -26,93 +21,77 @@ python --version
 7. Python code uses complete type annotations and clear docstrings.
 8. Prompts and structured-output schemas are named and versioned artifacts.
 
-## Current architecture
+## Milestone 1D - One-page Gemini smoke run
+
+The first executable vertical slice is now available:
 
 ```text
-src/siftforge/
-├── extraction/
-│   ├── artifacts/
-│   ├── materializers/
-│   ├── models/
-│   ├── providers/
-│   │   └── gemini.py
-│   ├── runtime/
-│   ├── sources/
-│   └── validation/
-└── ebook/
-    ├── extraction/
-    │   └── contracts.py
-    ├── models/
-    ├── pipeline/
-    └── renderers/
-```
-
-## Milestone 1A - PDF source discovery
-
-`PDFSource` discovers each PDF page as an independent `SourceRef` and records
-stable hashes/provenance.
-
-## Milestone 1B - Source materialization
-
-`PDFPageMaterializer` extracts the original encoded JPEG bytes from compatible
-image-only PDF pages without rendering or re-encoding them.
-
-## Milestone 1C - Provider and structured-output contracts
-
-The generic extraction task now carries:
-
-- one or more `MaterializedAsset` objects;
-- a versioned `PromptSpec`;
-- a versioned `ExtractionSchema`;
-- a provider-independent capability name.
-
-The first real provider is `GeminiProvider`, but the ebook application does not
-import or depend on Gemini.
-
-```text
+vFlat PDF
+  ↓
 PDFSource
   ↓
 SourceRef
   ↓
 PDFPageMaterializer
   ↓
-MaterializedAsset
+original JPEG MaterializedAsset
   ↓
-ExtractionTask
-  ├── capability
-  ├── PromptSpec(name + version)
-  └── ExtractionSchema(name + version + JSON Schema)
+versioned ebook prompt + JSON Schema
   ↓
 GeminiProvider
   ↓
 ExtractionResult
-  ├── raw JSON text
-  ├── parsed structured data
-  └── Attempt provenance
+  ↓
+filesystem artifacts
 ```
 
-The initial ebook contract is intentionally fidelity-first:
+The ebook application owns the page-transcription prompt/schema. Gemini remains
+a generic extraction provider and does not import ebook-domain code.
 
-- transcribe instead of summarize/rewrite;
-- preserve visible reading order;
-- classify semantic blocks;
-- separate probable headers, footers, and printed page numbers;
-- report uncertainty instead of guessing.
-
-## Install for development
-
-Core + test dependencies:
-
-```bash
-pip install -e ".[dev]"
-```
-
-Gemini provider support:
+### Install
 
 ```bash
 pip install -e ".[dev,gemini]"
 ```
 
-No Gemini model name is hard-coded into the project. A caller must choose a
-model explicitly so model selection remains policy/configuration rather than
-ebook-domain logic.
+### Authentication
+
+Use a Gemini Developer API key through an environment variable. Do not put the
+key in the repository or command history.
+
+```bash
+export GEMINI_API_KEY='...'
+```
+
+The Google SDK also supports `GOOGLE_API_KEY`; set only one when possible.
+
+### Run one real page
+
+For example:
+
+```bash
+siftforge ebook extract-page \
+  --pdf /path/to/18-nam-kim-cuong.pdf \
+  --page 18 \
+  --model gemini-3.6-flash
+```
+
+`--model` is intentionally explicit. Model selection belongs to routing/config
+policy, not ebook-domain code.
+
+By default the run is written under:
+
+```text
+runs/<pdf-stem>/page-0018/
+├── assets/
+│   └── page-0018.jpg
+├── manifest.json
+├── normalized/
+│   └── page.json
+└── raw/
+    └── provider-response.json
+```
+
+No batch processing is enabled yet. Milestone 1D is deliberately limited to a
+single page so prompt/schema behavior can be inspected before spending quota on
+the complete document.
