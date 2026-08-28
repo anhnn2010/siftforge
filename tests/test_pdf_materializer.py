@@ -15,7 +15,6 @@ from pypdf.generic import (
 from siftforge.extraction.materializers import PDFPageMaterializer
 from siftforge.extraction.sources import PDFSource
 
-
 _JPEG_BYTES: bytes = base64.b64decode(
     "/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAMCAgMCAgMDAwMEAwMEBQgFBQQE"
     "BQoHBwYIDAoMDAsKCwsNDhIQDQ4RDgsLEBYQERMUFRUVDA8XGBYUGBIUFRT/"

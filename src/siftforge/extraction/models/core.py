@@ -73,12 +73,53 @@ class MaterializedAsset:
 
 
 @dataclass(frozen=True, slots=True)
+class PromptSpec:
+    """Versioned provider-independent extraction instruction.
+
+    Attributes:
+        name: Stable prompt identifier.
+        version: Explicit revision used for provenance and future cache keys.
+        text: Human-readable extraction instruction.
+    """
+
+    name: str
+    version: str
+    text: str
+
+
+@dataclass(frozen=True, slots=True)
+class ExtractionSchema:
+    """Versioned structured-output contract for an extraction task.
+
+    Attributes:
+        name: Stable schema identifier.
+        version: Explicit revision used for provenance and future cache keys.
+        json_schema: JSON Schema expected from a structured extraction mechanism.
+    """
+
+    name: str
+    version: str
+    json_schema: dict[str, Any]
+
+
+@dataclass(frozen=True, slots=True)
 class ExtractionTask:
-    """Provider-independent description of one extraction request."""
+    """Provider-independent description of one extraction request.
+
+    Attributes:
+        source: Logical source item associated with the request.
+        capability: Semantic capability required from an extraction mechanism.
+        prompt: Versioned extraction instruction.
+        schema: Versioned expected structured-output contract.
+        assets: Materialized provider-consumable inputs.
+        metadata: Task-specific hints that do not belong to the source itself.
+    """
 
     source: SourceRef
     capability: str
-    schema_name: str
+    prompt: PromptSpec
+    schema: ExtractionSchema
+    assets: tuple[MaterializedAsset, ...] = ()
     metadata: dict[str, Any] = field(default_factory=dict)
 
 

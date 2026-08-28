@@ -7,13 +7,21 @@ name = "siftforge"
 version = "0.1.0"
 description = "Reusable Python data extraction pipeline with validation, fallback strategies, and cost-aware AI routing."
 readme = "README.md"
-requires-python = ">=3.12"
+requires-python = ">=3.12,<3.13"
 license = {text = "MIT"}
 authors = [{name = "SiftForge contributors"}]
-dependencies = ["pypdf>=5.0"]
+dependencies = [
+    "pypdf>=5,<7",
+]
 
 [project.optional-dependencies]
-dev = ["pytest>=8.0", "ruff>=0.6"]
+dev = [
+    "pytest>=8.0",
+    "ruff>=0.6",
+]
+gemini = [
+    "google-genai>=1,<2",
+]
 
 [tool.setuptools.packages.find]
 where = ["src"]
@@ -28,7 +36,10 @@ target-version = "py312"
 
 [tool.ruff.lint]
 select = ["ANN", "B", "D", "E", "F", "I", "UP"]
-ignore = ["ANN401"]
+ignore = [
+    # Generic extraction payloads legitimately cross typed/untyped boundaries.
+    "ANN401",
+]
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"

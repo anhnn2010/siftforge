@@ -3,7 +3,9 @@
 from siftforge.extraction.models import (
     Attempt,
     ExtractionResult,
+    ExtractionSchema,
     ExtractionTask,
+    PromptSpec,
     SourceRef,
     ValidationResult,
     ValidationStatus,
@@ -38,7 +40,12 @@ def test_pipeline_does_not_depend_on_real_provider() -> None:
     task = ExtractionTask(
         source=SourceRef(source_id="page-1", uri="fixture://page-1"),
         capability="document_transcription",
-        schema_name="PageContent",
+        prompt=PromptSpec(name="fixture", version="1", text="Extract."),
+        schema=ExtractionSchema(
+            name="fixture",
+            version="1",
+            json_schema={"type": "object"},
+        ),
     )
 
     outcome = Pipeline(FakeExtractor(), FakeValidator()).run(task)

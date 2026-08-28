@@ -3,8 +3,10 @@
 from .core import (
     Attempt,
     ExtractionResult,
+    ExtractionSchema,
     ExtractionTask,
     MaterializedAsset,
+    PromptSpec,
     SourceRef,
     TaskStatus,
     ValidationResult,
@@ -14,8 +16,10 @@ from .core import (
 __all__: list[str] = [
     "Attempt",
     "ExtractionResult",
+    "ExtractionSchema",
     "ExtractionTask",
     "MaterializedAsset",
+    "PromptSpec",
     "SourceRef",
     "TaskStatus",
     "ValidationResult",
