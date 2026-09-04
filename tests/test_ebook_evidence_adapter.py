@@ -169,6 +169,7 @@ def test_adapter_does_not_invent_marker_region_or_span_language() -> None:
     assert list_block.marker is None
     assert list_block.region is None
     assert list_block.spans[0].language == list_block.dominant_language
+    assert list_block.spans[0].semantic_line_break_after is False
 
 
 def test_adapter_generates_deterministic_ids() -> None:

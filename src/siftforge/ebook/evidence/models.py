@@ -29,6 +29,9 @@ class BlockRoleHint(StrEnum):
     HEADING = "heading"
     QUOTE = "quote"
     LIST = "list"
+    LIST_ITEM = "list_item"
+    VERSE = "verse"
+    ATTRIBUTION = "attribution"
     FOOTNOTE = "footnote"
     IMAGE = "image"
     CAPTION = "caption"
@@ -88,6 +91,7 @@ class TextSpanEvidence:
     text: str
     language: str | None
     source_typography: SourceTypography
+    semantic_line_break_after: bool = False
 
 
 @dataclass(frozen=True, slots=True)
