@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from siftforge.ebook.evidence.identity import build_block_id, build_span_id
 from siftforge.ebook.evidence.models import (
     BlockRoleHint,
     HeadingRoleHint,
@@ -70,7 +71,7 @@ def _block_to_evidence(
     block_index: int,
 ) -> PageBlockEvidence:
     """Convert one v4 block without adding new semantic interpretation."""
-    block_id = _block_id(page_id, block_index)
+    block_id = build_block_id(page_id, block_index)
     spans = tuple(
         _span_to_evidence(block_id, span, block.language, span_index)
         for span_index, span in enumerate(block.content)
@@ -98,7 +99,7 @@ def _span_to_evidence(
     """Convert one v4 span while copying only information v4 actually knows."""
     typography = span.typography
     return TextSpanEvidence(
-        span_id=_span_id(block_id, span_index),
+        span_id=build_span_id(block_id, span_index),
         text=span.text,
         language=block_language,
         source_typography=SourceTypography(
@@ -110,12 +111,3 @@ def _span_to_evidence(
         ),
     )
 
-
-def _block_id(page_id: str, block_index: int) -> str:
-    """Build a deterministic human-readable identifier for one page block."""
-    return f"{page_id}:block:{block_index + 1:04d}"
-
-
-def _span_id(block_id: str, span_index: int) -> str:
-    """Build a deterministic identifier for one span inside a page block."""
-    return f"{block_id}:span:{span_index + 1:04d}"

@@ -174,3 +174,34 @@ The staged contract is available explicitly as:
 EBOOK_PAGE_PROMPT_V5
 EBOOK_PAGE_SCHEMA_V5
 ```
+
+## Milestone 1F-3 - Strict v5 page-evidence normalizer
+
+Milestone 1F-3 adds `EbookPageEvidenceNormalizer`, which converts provider JSON
+matching the staged v5 contract into immutable `PageExtraction` evidence.
+
+The normalizer is intentionally strict and page-local. It:
+
+- assigns deterministic block/span IDs from `page_id` and array order
+- preserves span-level language and semantic line-break evidence
+- validates source typography without mapping it to EPUB emphasis
+- validates heading hints and rejects heading-only hints on non-heading blocks
+- preserves marker evidence without inferring final list semantics
+- validates normalized source regions, including cross-field page bounds
+- rejects duplicate text decorations and silent type coercion
+- rejects unknown/missing contract properties when called directly
+- serializes normalized evidence with source provenance and generated IDs
+
+Stable evidence IDs are shared with the v4 compatibility adapter through the
+same identity helpers, so migration does not introduce a second ID convention.
+
+The proven CLI runtime still uses the v4 aliases in this milestone:
+
+```text
+EBOOK_PAGE_PROMPT -> v4
+EBOOK_PAGE_SCHEMA -> v4
+```
+
+The v5 contract and normalizer can now be exercised explicitly. Runtime
+integration and golden-page execution are deferred to the next milestone so
+this commit does not change the existing `extract-page` behavior.

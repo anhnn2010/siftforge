@@ -8,6 +8,7 @@ from .contracts import (
     EBOOK_PAGE_SCHEMA_V4,
     EBOOK_PAGE_SCHEMA_V5,
 )
+from .evidence_normalizer import EbookPageEvidenceNormalizer
 from .normalizer import EbookPageNormalizationError, EbookPageNormalizer
 
 __all__: list[str] = [
@@ -17,6 +18,7 @@ __all__: list[str] = [
     "EBOOK_PAGE_SCHEMA",
     "EBOOK_PAGE_SCHEMA_V4",
     "EBOOK_PAGE_SCHEMA_V5",
+    "EbookPageEvidenceNormalizer",
     "EbookPageNormalizationError",
     "EbookPageNormalizer",
 ]
