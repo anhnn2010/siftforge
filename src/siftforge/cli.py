@@ -9,7 +9,10 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from siftforge.ebook.extraction import EbookPageNormalizationError
-from siftforge.ebook.pipeline import EbookPDFPageExtractionService
+from siftforge.ebook.pipeline import (
+    EbookPDFPageEvidenceExtractionService,
+    EbookPDFPageExtractionService,
+)
 from siftforge.extraction.materializers import PDFPageMaterializationError
 from siftforge.extraction.providers import (
     GeminiProvider,
@@ -54,6 +57,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="Explicit Gemini model ID selected for this smoke run.",
     )
     extract_page.add_argument(
+        "--contract-version",
+        choices=("4", "5"),
+        default="5",
+        help="Ebook extraction contract. Defaults to active page-evidence v5.",
+    )
+    extract_page.add_argument(
         "--run-dir",
         type=Path,
         default=None,
@@ -82,7 +91,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
 
 def _run_ebook_extract_page(args: argparse.Namespace) -> int:
-    """Execute the one-page Gemini ebook smoke-run command."""
+    """Execute one-page Gemini extraction using the selected ebook contract."""
     if not (os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")):
         print(
             "error: set GEMINI_API_KEY or GOOGLE_API_KEY before calling Gemini",
@@ -108,10 +117,17 @@ def _run_ebook_extract_page(args: argparse.Namespace) -> int:
             temperature=0.0,
         )
     )
-    service = EbookPDFPageExtractionService(provider)
 
     try:
-        run = service.extract_page(
+        if args.contract_version == "4":
+            return _run_ebook_extract_page_v4(
+                provider=provider,
+                pdf_path=pdf_path,
+                page_number=args.page,
+                run_dir=run_dir,
+            )
+        return _run_ebook_extract_page_v5(
+            provider=provider,
             pdf_path=pdf_path,
             page_number=args.page,
             run_dir=run_dir,
@@ -126,11 +142,53 @@ def _run_ebook_extract_page(args: argparse.Namespace) -> int:
         print(f"error: {exc}", file=sys.stderr)
         return 2
 
-    print(f"source: {run.source.source_id}")
-    print(f"asset:  {run.asset.path}")
-    print(f"run:    {run.run_dir}")
-    print(f"kind:   {run.page_content.page_kind.value}")
-    print(f"blocks: {len(run.page_content.blocks)}")
+
+def _run_ebook_extract_page_v5(
+    *,
+    provider: GeminiProvider,
+    pdf_path: Path,
+    page_number: int,
+    run_dir: Path,
+) -> int:
+    """Run the active v5 page-evidence extraction path."""
+    service = EbookPDFPageEvidenceExtractionService(provider)
+    run = service.extract_page(
+        pdf_path=pdf_path,
+        page_number=page_number,
+        run_dir=run_dir,
+    )
+
+    print(f"source:   {run.source.source_id}")
+    print(f"asset:    {run.asset.path}")
+    print(f"run:      {run.run_dir}")
+    print("contract: v5 page evidence")
+    print(f"kind:     {run.page_evidence.page_kind_hint.value}")
+    print(f"blocks:   {len(run.page_evidence.blocks)}")
+    print("result: typed page evidence saved to normalized/page.json")
+    return 0
+
+
+def _run_ebook_extract_page_v4(
+    *,
+    provider: GeminiProvider,
+    pdf_path: Path,
+    page_number: int,
+    run_dir: Path,
+) -> int:
+    """Run the retained v4 page-content path for regression comparison."""
+    service = EbookPDFPageExtractionService(provider)
+    run = service.extract_page(
+        pdf_path=pdf_path,
+        page_number=page_number,
+        run_dir=run_dir,
+    )
+
+    print(f"source:   {run.source.source_id}")
+    print(f"asset:    {run.asset.path}")
+    print(f"run:      {run.run_dir}")
+    print("contract: v4 page content")
+    print(f"kind:     {run.page_content.page_kind.value}")
+    print(f"blocks:   {len(run.page_content.blocks)}")
     print("result: typed page content saved to normalized/page.json")
     return 0
 

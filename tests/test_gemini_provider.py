@@ -8,7 +8,10 @@ from typing import Any
 
 import pytest
 
-from siftforge.ebook.extraction import EBOOK_PAGE_PROMPT, EBOOK_PAGE_SCHEMA
+from siftforge.ebook.extraction import (
+    EBOOK_PAGE_PROMPT_V4,
+    EBOOK_PAGE_SCHEMA_V4,
+)
 from siftforge.extraction.models import (
     ExtractionTask,
     MaterializedAsset,
@@ -74,8 +77,8 @@ def _make_task(tmp_path: Path) -> ExtractionTask:
     return ExtractionTask(
         source=source,
         capability="document_transcription",
-        prompt=EBOOK_PAGE_PROMPT,
-        schema=EBOOK_PAGE_SCHEMA,
+        prompt=EBOOK_PAGE_PROMPT_V4,
+        schema=EBOOK_PAGE_SCHEMA_V4,
         assets=(asset,),
     )
 
@@ -106,7 +109,10 @@ def test_gemini_provider_passes_explicit_typography_schema(
     assert result.attempts[0].metadata["schema_version"] == "4"
 
     assert transport.last_call is not None
-    assert transport.last_call["response_json_schema"] == EBOOK_PAGE_SCHEMA.json_schema
+    assert (
+        transport.last_call["response_json_schema"]
+        == EBOOK_PAGE_SCHEMA_V4.json_schema
+    )
 
 
 def test_gemini_provider_rejects_task_without_asset(tmp_path: Path) -> None:

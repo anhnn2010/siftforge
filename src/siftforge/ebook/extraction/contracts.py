@@ -42,8 +42,8 @@ _SOURCE_TYPOGRAPHY_SCHEMA = {
     },
 }
 
-# v4 remains the active runtime contract during Milestone 1F-2. Keeping explicit
-# versioned names lets v5 evolve in parallel without changing the working CLI.
+# v4 remains available for regression/A-B comparison after v5 becomes active.
+# Explicit versioned names keep historical artifacts reproducible.
 EBOOK_PAGE_PROMPT_V4 = PromptSpec(
     name="ebook_page_transcription",
     version="4",
@@ -520,7 +520,7 @@ EBOOK_PAGE_SCHEMA_V5 = ExtractionSchema(
     },
 )
 
-# Compatibility aliases intentionally keep the proven v4 runtime active until the
-# dedicated v5 normalizer lands in Milestone 1F-3.
-EBOOK_PAGE_PROMPT = EBOOK_PAGE_PROMPT_V4
-EBOOK_PAGE_SCHEMA = EBOOK_PAGE_SCHEMA_V4
+# Milestone 1F-4 promotes the page-evidence contract to the active runtime.
+# Explicit v4 names remain available for regression and A/B comparison runs.
+EBOOK_PAGE_PROMPT = EBOOK_PAGE_PROMPT_V5
+EBOOK_PAGE_SCHEMA = EBOOK_PAGE_SCHEMA_V5

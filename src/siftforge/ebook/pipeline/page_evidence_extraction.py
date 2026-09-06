@@ -1,4 +1,4 @@
-"""Legacy v4 PDF-to-typed-page-content service for ebook extraction."""
+"""One-page PDF-to-v5-evidence application service for ebook extraction."""
 
 from __future__ import annotations
 
@@ -6,12 +6,12 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from siftforge.ebook.evidence import PageExtraction
 from siftforge.ebook.extraction import (
-    EBOOK_PAGE_PROMPT_V4,
-    EBOOK_PAGE_SCHEMA_V4,
-    EbookPageNormalizer,
+    EBOOK_PAGE_PROMPT_V5,
+    EBOOK_PAGE_SCHEMA_V5,
+    EbookPageEvidenceNormalizer,
 )
-from siftforge.ebook.models import PageContent
 from siftforge.extraction.artifacts import FilesystemArtifactStore
 from siftforge.extraction.materializers import PDFPageMaterializer
 from siftforge.extraction.models import (
@@ -25,40 +25,42 @@ from siftforge.extraction.sources import PDFSource
 
 
 @dataclass(frozen=True, slots=True)
-class EbookPageExtractionRun:
-    """Artifacts and typed result produced by one ebook page extraction run."""
+class EbookPageEvidenceExtractionRun:
+    """Artifacts and typed evidence produced by one v5 page extraction run."""
 
     source: SourceRef
     asset: MaterializedAsset
     extraction: ExtractionResult
-    page_content: PageContent
+    page_evidence: PageExtraction
     run_dir: Path
 
 
-class EbookPDFPageExtractionService:
-    """Orchestrate one PDF page through the legacy v4 content contract.
+class EbookPDFPageEvidenceExtractionService:
+    """Orchestrate one PDF page through the active v5 page-evidence contract.
 
     Args:
         extractor: Provider-compatible extraction mechanism selected by the caller.
-        normalizer: Optional ebook-domain normalizer for structured provider output.
+        normalizer: Optional strict v5 evidence normalizer.
     """
 
     def __init__(
         self,
         extractor: Extractor,
-        normalizer: EbookPageNormalizer | None = None,
+        normalizer: EbookPageEvidenceNormalizer | None = None,
     ) -> None:
-        """Initialize the service with externally selected extraction components."""
+        """Initialize the service without selecting provider/model policy."""
         self._extractor: Extractor = extractor
-        self._normalizer: EbookPageNormalizer = normalizer or EbookPageNormalizer()
+        self._normalizer: EbookPageEvidenceNormalizer = (
+            normalizer or EbookPageEvidenceNormalizer()
+        )
 
     def extract_page(
         self,
         pdf_path: str | Path,
         page_number: int,
         run_dir: str | Path,
-    ) -> EbookPageExtractionRun:
-        """Extract one physical PDF page into validated typed ebook content.
+    ) -> EbookPageEvidenceExtractionRun:
+        """Extract one physical PDF page into strict v5 page-local evidence.
 
         Args:
             pdf_path: Input PDF containing the scanned book.
@@ -66,12 +68,12 @@ class EbookPDFPageExtractionService:
             run_dir: Directory used for materialized assets and run artifacts.
 
         Returns:
-            Complete one-page extraction run including typed page content.
+            Complete one-page extraction run including typed page evidence.
 
         Raises:
-            ValueError: If `page_number` is outside the PDF.
-            EbookPageNormalizationError: If provider output violates the ebook
-                domain contract.
+            ValueError: If ``page_number`` is outside the PDF.
+            EbookPageNormalizationError: If provider output violates the v5
+                page-evidence contract.
         """
         if page_number < 1:
             raise ValueError("page number must be greater than or equal to 1")
@@ -87,14 +89,19 @@ class EbookPDFPageExtractionService:
         task = ExtractionTask(
             source=source_ref,
             capability="document_transcription",
-            prompt=EBOOK_PAGE_PROMPT_V4,
-            schema=EBOOK_PAGE_SCHEMA_V4,
+            prompt=EBOOK_PAGE_PROMPT_V5,
+            schema=EBOOK_PAGE_SCHEMA_V5,
             assets=(asset,),
-            metadata={"application": "ebook"},
+            metadata={
+                "application": "ebook",
+                "contract_version": "5",
+                "output_model": "PageExtraction",
+            },
         )
         extraction = self._extractor.extract(task)
-        page_content = self._normalizer.normalize(
+        page_evidence = self._normalizer.normalize(
             page_id=source_ref.source_id,
+            source=source_ref,
             payload=extraction.normalized_data,
         )
 
@@ -103,14 +110,14 @@ class EbookPDFPageExtractionService:
             source=source_ref,
             asset=asset,
             extraction=extraction,
-            page_content=page_content,
+            page_evidence=page_evidence,
         )
 
-        return EbookPageExtractionRun(
+        return EbookPageEvidenceExtractionRun(
             source=source_ref,
             asset=asset,
             extraction=extraction,
-            page_content=page_content,
+            page_evidence=page_evidence,
             run_dir=run_path,
         )
 
@@ -131,9 +138,9 @@ class EbookPDFPageExtractionService:
         source: SourceRef,
         asset: MaterializedAsset,
         extraction: ExtractionResult,
-        page_content: PageContent,
+        page_evidence: PageExtraction,
     ) -> None:
-        """Persist provenance, raw output, and typed normalized page content."""
+        """Persist provenance, raw output, and normalized v5 page evidence."""
         raw_text = (
             extraction.raw_data
             if isinstance(extraction.raw_data, str)
@@ -142,7 +149,7 @@ class EbookPDFPageExtractionService:
         store.write_text("raw/provider-response.json", raw_text)
         store.write_json(
             "normalized/page.json",
-            self._normalizer.to_dict(page_content),
+            self._normalizer.to_dict(page_evidence),
         )
 
         manifest: dict[str, Any] = {
@@ -172,7 +179,7 @@ class EbookPDFPageExtractionService:
                 "version": extraction.task.schema.version,
             },
             "normalization": {
-                "model": "PageContent",
+                "model": "PageExtraction",
                 "status": "success",
             },
             "attempts": [

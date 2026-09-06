@@ -18,10 +18,10 @@ def _span_schema() -> dict[str, object]:
     return _block_schema()["properties"]["content"]["items"]
 
 
-def test_v5_contract_is_explicitly_versioned_but_not_active_yet() -> None:
-    """Milestone 1F-2 should stage v5 without switching the working runtime."""
-    assert EBOOK_PAGE_PROMPT.version == "4"
-    assert EBOOK_PAGE_SCHEMA.version == "4"
+def test_v5_contract_is_explicitly_versioned_and_active() -> None:
+    """Milestone 1F-4 should promote v5 to the active ebook contract."""
+    assert EBOOK_PAGE_PROMPT.version == "5"
+    assert EBOOK_PAGE_SCHEMA.version == "5"
     assert EBOOK_PAGE_PROMPT_V5.name == "ebook_page_evidence"
     assert EBOOK_PAGE_PROMPT_V5.version == "5"
     assert EBOOK_PAGE_SCHEMA_V5.name == "ebook_page_evidence"

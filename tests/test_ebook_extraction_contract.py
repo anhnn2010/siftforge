@@ -1,20 +1,23 @@
 """Tests for the versioned ebook extraction contract."""
 
-from siftforge.ebook.extraction import EBOOK_PAGE_PROMPT, EBOOK_PAGE_SCHEMA
+from siftforge.ebook.extraction import (
+    EBOOK_PAGE_PROMPT_V4,
+    EBOOK_PAGE_SCHEMA_V4,
+)
 
 
 def _span_schema() -> dict[str, object]:
     """Return the JSON Schema fragment for one rich-text span."""
-    block_schema = EBOOK_PAGE_SCHEMA.json_schema["properties"]["blocks"]["items"]
+    block_schema = EBOOK_PAGE_SCHEMA_V4.json_schema["properties"]["blocks"]["items"]
     return block_schema["properties"]["content"]["items"]
 
 
 def test_ebook_contract_is_explicitly_versioned() -> None:
     """Prompt and schema versions should be stable provenance identifiers."""
-    assert EBOOK_PAGE_PROMPT.name == "ebook_page_transcription"
-    assert EBOOK_PAGE_PROMPT.version == "4"
-    assert EBOOK_PAGE_SCHEMA.name == "ebook_page_content"
-    assert EBOOK_PAGE_SCHEMA.version == "4"
+    assert EBOOK_PAGE_PROMPT_V4.name == "ebook_page_transcription"
+    assert EBOOK_PAGE_PROMPT_V4.version == "4"
+    assert EBOOK_PAGE_SCHEMA_V4.name == "ebook_page_content"
+    assert EBOOK_PAGE_SCHEMA_V4.version == "4"
 
 
 def test_ebook_schema_requires_explicit_typography() -> None:
@@ -54,7 +57,7 @@ def test_ebook_schema_keeps_unknown_as_first_class_typography_state() -> None:
 
 def test_ebook_schema_supports_language_per_block() -> None:
     """Mixed-language pages should not be flattened into one page language."""
-    block_schema = EBOOK_PAGE_SCHEMA.json_schema["properties"]["blocks"]["items"]
+    block_schema = EBOOK_PAGE_SCHEMA_V4.json_schema["properties"]["blocks"]["items"]
 
     assert "language" in block_schema["required"]
     assert "language" in block_schema["properties"]

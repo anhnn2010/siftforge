@@ -107,15 +107,15 @@ PDFPageMaterializer
   ↓
 original JPEG MaterializedAsset
   ↓
-ebook prompt + JSON Schema v4
+ebook page-evidence prompt + JSON Schema v5
   ↓
 GeminiProvider
   ↓
 raw provider JSON
   ↓
-EbookPageNormalizer
+EbookPageEvidenceNormalizer
   ↓
-typed PageContent
+typed PageExtraction
   ↓
 normalized/page.json + manifest.json
 ```
@@ -205,3 +205,71 @@ EBOOK_PAGE_SCHEMA -> v4
 The v5 contract and normalizer can now be exercised explicitly. Runtime
 integration and golden-page execution are deferred to the next milestone so
 this commit does not change the existing `extract-page` behavior.
+
+
+## Milestone 1F-4 - Active v5 extraction path
+
+Milestone 1F-4 promotes the page-evidence contract to the canonical runtime path.
+The unchanged smoke command now uses **v5** by default:
+
+```bash
+siftforge ebook extract-page \
+  --pdf 18-nam-kim-cuong.pdf \
+  --page 18 \
+  --model gemini-3.6-flash
+```
+
+The active path is now:
+
+```text
+PDF page
+  ↓
+original embedded JPEG
+  ↓
+EBOOK_PAGE_PROMPT_V5 + EBOOK_PAGE_SCHEMA_V5
+  ↓
+GeminiProvider
+  ↓
+EbookPageEvidenceNormalizer
+  ↓
+PageExtraction
+  ↓
+normalized/page.json + manifest.json
+```
+
+`normalized/page.json` now contains deterministic block/span IDs plus the
+page-local evidence needed by the future book structural pass: span language,
+source typography, semantic verse line breaks, marker evidence, heading-role
+hints, and image regions.
+
+The old v4 path remains available for controlled regression/A-B comparisons:
+
+```bash
+siftforge ebook extract-page \
+  --pdf 18-nam-kim-cuong.pdf \
+  --page 18 \
+  --model gemini-3.6-flash \
+  --contract-version 4 \
+  --run-dir runs/v4/page-0018
+```
+
+For a comparable v5 artifact, use a separate run directory:
+
+```bash
+siftforge ebook extract-page \
+  --pdf 18-nam-kim-cuong.pdf \
+  --page 18 \
+  --model gemini-3.6-flash \
+  --run-dir runs/v5/page-0018
+```
+
+The compatibility aliases now point to the active contract:
+
+```text
+EBOOK_PAGE_PROMPT -> v5
+EBOOK_PAGE_SCHEMA -> v5
+```
+
+Explicit `EBOOK_PAGE_PROMPT_V4` and `EBOOK_PAGE_SCHEMA_V4` names are retained so
+historical v4 extraction remains reproducible while the golden-page comparison
+round is performed.
