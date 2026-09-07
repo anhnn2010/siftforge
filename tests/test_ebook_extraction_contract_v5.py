@@ -3,6 +3,7 @@
 from siftforge.ebook.extraction import (
     EBOOK_PAGE_PROMPT,
     EBOOK_PAGE_PROMPT_V5,
+    EBOOK_PAGE_PROMPT_V5_R1,
     EBOOK_PAGE_SCHEMA,
     EBOOK_PAGE_SCHEMA_V5,
 )
@@ -19,11 +20,13 @@ def _span_schema() -> dict[str, object]:
 
 
 def test_v5_contract_is_explicitly_versioned_and_active() -> None:
-    """Milestone 1F-4 should promote v5 to the active ebook contract."""
-    assert EBOOK_PAGE_PROMPT.version == "5"
+    """Milestone 1F-4r1 should keep schema v5 with prompt revision 5.1."""
+    assert EBOOK_PAGE_PROMPT.version == "5.1"
     assert EBOOK_PAGE_SCHEMA.version == "5"
     assert EBOOK_PAGE_PROMPT_V5.name == "ebook_page_evidence"
     assert EBOOK_PAGE_PROMPT_V5.version == "5"
+    assert EBOOK_PAGE_PROMPT_V5_R1.name == "ebook_page_evidence"
+    assert EBOOK_PAGE_PROMPT_V5_R1.version == "5.1"
     assert EBOOK_PAGE_SCHEMA_V5.name == "ebook_page_evidence"
     assert EBOOK_PAGE_SCHEMA_V5.version == "5"
 
@@ -105,7 +108,7 @@ def test_v5_schema_supports_normalized_image_regions() -> None:
 
 def test_v5_prompt_captures_regression_round_design_boundaries() -> None:
     """Prompt text should encode the important evidence-vs-semantics boundaries."""
-    prompt = EBOOK_PAGE_PROMPT_V5.text
+    prompt = EBOOK_PAGE_PROMPT_V5_R1.text
 
     assert "NOT the final ebook structure" in prompt
     assert "Do not invent stable IDs" in prompt
@@ -119,3 +122,38 @@ def test_v5_prompt_captures_regression_round_design_boundaries() -> None:
     assert "does NOT assert EPUB" in prompt
     assert "semantic emphasis or strong importance" in prompt
     assert "tight normalized region" in prompt
+
+
+def test_v5_r1_prompt_tightens_typography_boundary_detection() -> None:
+    """Pages 18 and 398 require local typography decisions at short boundaries."""
+    prompt = " ".join(EBOOK_PAGE_PROMPT_V5_R1.text.split())
+
+    assert "Judge each span's posture and weight" in prompt
+    assert "Do not carry italic, roman, bold, or normal styling" in prompt
+    assert "Short labels and transition lines must be checked independently" in prompt
+    assert "an upright label between italic passages must remain roman" in prompt
+    assert (
+        "an italic transition line between roman passages must remain italic"
+        in prompt
+    )
+
+
+def test_v5_r1_prompt_distinguishes_semantic_lines_from_heading_wraps() -> None:
+    """Pages 68 and 152 require verse lines without preserving heading wrapping."""
+    prompt = " ".join(EBOOK_PAGE_PROMPT_V5_R1.text.split())
+
+    assert "For headings, titles, subtitles, labels, and ordinary prose" in prompt
+    assert "default semantic_line_break_after to false" in prompt
+    assert (
+        "Do not create separate spans solely because prose or a heading wraps"
+        in prompt
+    )
+    assert "final span of the final verse line in that block MUST be false" in prompt
+
+
+def test_v5_r1_prompt_keeps_scenario_label_role_stable() -> None:
+    """Pages 402 and 412 should classify the recurring label consistently."""
+    prompt = " ".join(EBOOK_PAGE_PROMPT_V5_R1.text.split())
+
+    assert '"TÌNH HUỐNG" is scenario_label' in prompt
+    assert "scenario_title for the specific scenario name" in prompt

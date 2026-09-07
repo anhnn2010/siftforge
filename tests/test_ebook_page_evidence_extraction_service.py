@@ -143,6 +143,6 @@ def test_v5_service_writes_typed_page_evidence(tmp_path: Path) -> None:
     manifest = json.loads(
         (run_dir / "manifest.json").read_text(encoding="utf-8")
     )
-    assert manifest["prompt"]["version"] == "5"
+    assert manifest["prompt"]["version"] == "5.1"
     assert manifest["schema"]["version"] == "5"
     assert manifest["normalization"]["model"] == "PageExtraction"

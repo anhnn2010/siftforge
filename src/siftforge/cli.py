@@ -161,7 +161,7 @@ def _run_ebook_extract_page_v5(
     print(f"source:   {run.source.source_id}")
     print(f"asset:    {run.asset.path}")
     print(f"run:      {run.run_dir}")
-    print("contract: v5 page evidence")
+    print("contract: v5 page evidence (prompt 5.1)")
     print(f"kind:     {run.page_evidence.page_kind_hint.value}")
     print(f"blocks:   {len(run.page_evidence.blocks)}")
     print("result: typed page evidence saved to normalized/page.json")

@@ -107,7 +107,7 @@ PDFPageMaterializer
   ↓
 original JPEG MaterializedAsset
   ↓
-ebook page-evidence prompt + JSON Schema v5
+ebook page-evidence prompt 5.1 + JSON Schema v5
   ↓
 GeminiProvider
   ↓
@@ -273,3 +273,44 @@ EBOOK_PAGE_SCHEMA -> v5
 Explicit `EBOOK_PAGE_PROMPT_V4` and `EBOOK_PAGE_SCHEMA_V4` names are retained so
 historical v4 extraction remains reproducible while the golden-page comparison
 round is performed.
+
+## Milestone 1F-4r1 - Regression-tuned v5 prompt revision
+
+A nine-page v5 regression round validated the core evidence design on pages 18,
+68, 116, 152, 378, 397, 398, 402, and 412. The schema and strict normalizer remain
+unchanged; this milestone introduces prompt revision **5.1** so historical prompt
+v5 artifacts stay reproducible.
+
+The revision tightens three behaviors observed in those real pages:
+
+- typography boundaries: classify short labels and transition lines from their own
+  visible glyphs instead of inheriting roman/italic styling from neighbors
+- semantic line breaks: preserve verse lines, collapse ordinary heading/prose wraps,
+  and require the final verse line to end with `semantic_line_break_after=false`
+- heading roles: recurring `TÌNH HUỐNG` labels remain `scenario_label` whether or not
+  a separate scenario title is present on the same page
+
+It also explicitly tells the extractor not to create separate spans solely because a
+heading or prose line wraps physically. This prevents a false semantic break from
+leaving two adjacent spans that would concatenate without the source word boundary.
+
+The active pairing is now:
+
+```text
+prompt: ebook_page_evidence 5.1
+schema: ebook_page_evidence 5
+```
+
+The historical prompt remains available as `EBOOK_PAGE_PROMPT_V5`; the active
+revision is `EBOOK_PAGE_PROMPT_V5_R1`. The normal smoke command is unchanged.
+
+Recommended post-change regression pages:
+
+```text
+18   typography boundary: roman label between italic regions
+68   verse line boundaries and final-line convention
+152  verse vs physical heading wrap
+398  italic transition line between roman paragraphs
+402  scenario label + separate scenario title
+412  scenario label without a separate title
+```

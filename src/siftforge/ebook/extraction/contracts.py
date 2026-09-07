@@ -389,6 +389,135 @@ Layout hints:
 """,
 )
 
+EBOOK_PAGE_PROMPT_V5_R1 = PromptSpec(
+    name="ebook_page_evidence",
+    version="5.1",
+    text="""Extract faithful page-local evidence from this scanned book page.
+
+This output is NOT the final ebook structure. Report what this physical page supports;
+a later book-level structural pass will resolve cross-page continuity, containers,
+heading hierarchy, running furniture, semantic emphasis, and other document-wide
+relationships. Do not invent stable IDs; downstream code assigns deterministic block
+and span IDs from source-page identity and array order.
+
+Content fidelity:
+- Do not summarize, translate, modernize, rewrite, proofread, or improve the text.
+- Preserve Vietnamese diacritics, punctuation, numbers, letter case, and meaningful
+  reading order exactly as supported by the image.
+- Reconstruct prose paragraphs semantically and remove line breaks caused only by page
+  width.
+- If content is unclear, do not invent missing words. Transcribe only supported text
+  and add a concise page warning describing the uncertainty.
+
+Page-local role hints:
+- role_hint is local evidence, not a final semantic decision. Use unknown when needed.
+- Use heading for a heading-like text block. Give heading_role_hint only when the role
+  is locally well supported; otherwise use unknown.
+- Heading roles describe function, not merely visual position or whether another
+  heading happens to follow on the same page.
+- A recurring label such as "TÌNH HUỐNG" is scenario_label even on a page where no
+  separate scenario title follows. Use scenario_title for the specific scenario name,
+  such as "Bật lại!", when one is visibly present.
+- Use list_item for one locally apparent enumeration/list item, not for a whole list.
+- Use verse for poetry, lyrics, ca dao, or other line-oriented verse whose semantic
+  line boundaries matter.
+- Use quote for prose quotation content. Multiple quoted paragraphs may be separate
+  quote blocks; a later pass will group them.
+- Use attribution for a visible source/author attribution when that role is locally
+  clear.
+- Repeated dialogue turns are not automatically a list. A dash introducing dialogue
+  punctuation should remain in the text rather than being converted to a list marker.
+- Visual list formatting does not by itself prove semantic list structure. For example,
+  heart-marked conversational turns may remain paragraph evidence with a visual marker.
+- Separate probable running headers, running footers, and printed page-number blocks
+  instead of silently deleting them. For a page-number block, language should be null.
+
+Visual markers:
+- Record a marker separately when a visible prefix or graphic functions as presentation
+  or structural evidence, such as a bullet, numeric/alphabetic enumerator, list dash, or
+  section graphic.
+- Exclude a separately recorded marker from readable content text.
+- A dash that is normal dialogue punctuation is NOT a marker and must remain in text.
+- For numeric markers, record the visible raw_text and ordinal. For alphabetic sequence
+  markers, ordinal may encode a=1, b=2, and so on when clear.
+- For a graphic marker, set kind=graphic and raw_text=null unless literal readable text
+  is actually printed. Never substitute an arbitrary Unicode glyph or emoji such as
+  Apple-logo private-use characters, pointing hands, flowers, or similar approximations
+  for a source graphic.
+
+Semantic line boundaries:
+- Every span has semantic_line_break_after. Set it true only when a line break carries
+  meaning that must survive reflow, such as a verse/lyric line, address line, or a
+  deliberately line-structured caption.
+- Keep semantic_line_break_after false for ordinary prose wrapping caused only by page
+  width.
+- For headings, titles, subtitles, labels, and ordinary prose, default
+  semantic_line_break_after to false. A visual wrap caused by line length, centering,
+  or available page width is not a semantic line break.
+- Preserve a heading/title line break only when the source clearly gives the separate
+  lines independent semantic identity, which should be rare.
+- Do not create separate spans solely because prose or a heading wraps visually. Merge
+  such wrapped text into the same semantic line with source-supported spacing.
+- Inside a verse block, set semantic_line_break_after=true only between semantic verse
+  lines. The final span of the final verse line in that block MUST be false.
+- When typography changes within one semantic line, use multiple spans and set the line
+  break only on the final span of that semantic line.
+
+Language:
+- Set dominant_language for the page and each textual block when confidently known.
+- Set language independently on every text span so mixed-language content inside one
+  block remains representable.
+- Prefer lowercase ISO 639-1 codes such as "vi" or "en" when applicable.
+- Use null when language is not meaningful or cannot be determined confidently.
+
+Source typography:
+- source_typography describes visible glyph appearance only. It does NOT assert EPUB
+  semantic emphasis or strong importance.
+- Every text span MUST explicitly classify posture, weight, vertical position, and caps
+  style from its own visible glyphs.
+- posture is roman, italic, or unknown.
+- weight is normal, bold, or unknown.
+- vertical_position is baseline, superscript, subscript, or unknown.
+- caps_style is normal, small_caps, or unknown.
+- decorations may contain underline when visibly present.
+- Preserve uppercase/lowercase directly in text. Uppercase text by itself is not small
+  caps.
+- Judge each span's posture and weight from that span's own visible glyphs. Do not carry
+  italic, roman, bold, or normal styling across a boundary from neighboring text.
+- Short labels and transition lines must be checked independently even when the text
+  immediately before or after them uses a different base style.
+- In particular, an upright label between italic passages must remain roman, and an
+  italic transition line between roman passages must remain italic when its own glyphs
+  support that classification.
+- Do not infer typography from semantic role, expected book style, or surrounding
+  paragraphs. A whole body/inset may legitimately use an italic base font without
+  implying semantic emphasis.
+- Use unknown rather than guessing when local glyph evidence is insufficient, and add a
+  concise warning when practical.
+- Use multiple spans whenever source typography or span language changes.
+
+Images and regions:
+- Use image for a meaningful photograph, illustration, or diagram. Do not invent a
+  prose description of image content.
+- Put a visible image caption in a separate caption block.
+- For each meaningful image block, provide a tight normalized region using x, y, width,
+  and height in the range 0..1 relative to the full page image.
+- Regions are extraction/provenance evidence for later cropping, not instructions to
+  reproduce the exact printed-page layout.
+- Use region=null for ordinary text blocks unless a region is specifically useful and
+  visually well supported.
+
+Layout hints:
+- Record alignment only when left/center/right/justify alignment is visually clear and
+  meaningful.
+- heading_level_hint is only a local visual/hierarchy hint from 1 to 6; use null when it
+  is not meaningful.
+- Do not preserve exact font family, font size, paper margins, or arbitrary physical
+  line wrapping.
+""",
+)
+
+
 EBOOK_PAGE_SCHEMA_V5 = ExtractionSchema(
     name="ebook_page_evidence",
     version="5",
@@ -520,7 +649,7 @@ EBOOK_PAGE_SCHEMA_V5 = ExtractionSchema(
     },
 )
 
-# Milestone 1F-4 promotes the page-evidence contract to the active runtime.
-# Explicit v4 names remain available for regression and A/B comparison runs.
-EBOOK_PAGE_PROMPT = EBOOK_PAGE_PROMPT_V5
+# Milestone 1F-4r1 keeps schema v5 and promotes prompt revision 5.1.
+# Explicit v4/v5 prompt names remain available for reproducible regression runs.
+EBOOK_PAGE_PROMPT = EBOOK_PAGE_PROMPT_V5_R1
 EBOOK_PAGE_SCHEMA = EBOOK_PAGE_SCHEMA_V5
