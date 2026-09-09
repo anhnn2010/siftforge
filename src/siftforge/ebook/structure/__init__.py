@@ -1,5 +1,10 @@
 """Pagination-independent ebook structural models."""
 
+from .analyzer import (
+    BookStructuralAnalyzer,
+    RunningFurnitureOccurrence,
+    StructuralAnalysisResult,
+)
 from .models import (
     AttributionNode,
     BookDocument,
@@ -27,6 +32,9 @@ from .models import (
 )
 
 __all__: list[str] = [
+    "StructuralAnalysisResult",
+    "RunningFurnitureOccurrence",
+    "BookStructuralAnalyzer",
     "AttributionNode",
     "BookDocument",
     "CaptionNode",

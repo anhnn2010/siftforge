@@ -314,3 +314,57 @@ Recommended post-change regression pages:
 402  scenario label + separate scenario title
 412  scenario label without a separate title
 ```
+
+## Milestone 1F-5 - Deterministic book structural analyzer skeleton
+
+Milestone 1F-5 introduces the first book-level pass over ordered
+`PageExtraction` evidence. It deliberately remains deterministic and
+conservative: page evidence is interpreted only where the v5 contract already
+provides strong signals, and uncertain cross-page reconstruction is kept as
+scored candidate relationships rather than silently merged.
+
+The new `BookStructuralAnalyzer` currently provides three core capabilities:
+
+- **running furniture normalization**: `page_header`, `page_footer`, and
+  `page_number` evidence is removed from logical body flow; duplicated printed
+  page numbers at footer/header edges are stripped for comparison; repeated
+  normalized furniture text is marked across pages
+- **explicit list grouping**: contiguous v5 `list_item` evidence is grouped into
+  `ListNode` containers, including across directly adjacent physical pages;
+  numeric/alphabetic markers produce ordered lists and explicit ordinals are
+  checked for sequence compatibility
+- **continuation candidate detection**: only adjacent physical pages are
+  considered, and likely continuations are emitted as scored
+  `CONTINUES_TO` relationships using conservative evidence such as missing
+  terminal punctuation, lowercase continuation, language agreement, and
+  compatible boundary typography
+
+The analyzer does **not** parse list markers out of arbitrary text. This keeps
+real regression contrasts intact:
+
+```text
+page 378: explicit numeric marker evidence -> ordered list items
+page 397: dash-prefixed dialogue -> paragraphs, not a list
+page 412: graphic-marked dialogue -> paragraphs with visual marker evidence
+```
+
+Likewise, continuation candidates are not automatically merged. A strong case
+such as a paragraph ending mid-sentence may produce a relationship with
+confidence/reasons while the two logical nodes remain independent until a
+later resolver accepts the candidate.
+
+The first pass also preserves already-explicit local structure where doing so is
+lossless: headings become provisional `HeadingNode` values, quote evidence is
+wrapped as a one-block `QuotationNode`, verse semantic line breaks become
+`VerseNode`/`VerseLineNode`, and footnote/attribution evidence maps to the
+matching logical leaf type. Unsupported evidence such as images/captions is
+reported in `StructuralAnalysisResult.unresolved_blocks` instead of being
+silently dropped; figure asset/caption resolution remains a later milestone.
+
+Source typography is copied into logical spans but still produces **no semantic
+`EMPHASIS` or `STRONG` marks**. Every logical span and node keeps deterministic
+provenance back to the exact page/block/span evidence that produced it.
+
+The existing `ebook extract-page` CLI is unchanged in this milestone. 1F-5 adds
+book-level library behavior and tests only; a multi-page structural CLI/artifact
+path can be added after the resolver behavior is proven.
