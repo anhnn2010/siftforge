@@ -1,9 +1,9 @@
 """Deterministic first-pass structural analysis for ebook page evidence.
 
-Milestone 1F-5 deliberately keeps this pass conservative. It removes page
-furniture from body flow, groups explicit page-local list-item evidence, and
-emits cross-page continuation candidates without silently merging content.
-Higher-level container resolution remains a later milestone.
+Milestone 1F-6 keeps the pass deterministic while resolving containers that
+are explicit in page evidence: lists, quotation runs, verse runs, and figures.
+Ambiguous higher-level structures such as embedded excerpts remain candidates
+rather than being expanded from language-specific heuristics.
 """
 
 from __future__ import annotations
@@ -24,12 +24,18 @@ from siftforge.ebook.evidence import (
 from .models import (
     AttributionNode,
     BookDocument,
+    CaptionNode,
+    ContainerCandidateKind,
+    ContainerResolutionCandidate,
     DocumentRelationship,
     DocumentTextSpan,
+    FigureNode,
     FlowNode,
     FootnoteNode,
     HeadingNode,
     HeadingRole,
+    ImageNode,
+    InsetRole,
     ListItemNode,
     ListKind,
     ListNode,
@@ -81,6 +87,7 @@ class StructuralAnalysisResult:
     document: BookDocument
     running_furniture: tuple[RunningFurnitureOccurrence, ...]
     unresolved_blocks: tuple[PageBlockEvidence, ...] = ()
+    container_candidates: tuple[ContainerResolutionCandidate, ...] = ()
 
     @property
     def continuation_candidates(self) -> tuple[DocumentRelationship, ...]:
@@ -104,10 +111,9 @@ class _EvidencePosition:
 class BookStructuralAnalyzer:
     """Build conservative logical structure from ordered page evidence.
 
-    This first milestone intentionally avoids opaque reconstruction. Explicit
-    page-local list items are grouped, running furniture is removed from body
-    flow, and likely cross-page continuations are retained as scored candidate
-    relationships instead of being merged automatically.
+    Explicit page-local container evidence is grouped without guessing hidden
+    semantics. Running furniture is removed, likely continuations stay scored
+    candidates, and incomplete inset evidence is surfaced for later resolution.
     """
 
     def analyze(self, pages: Sequence[PageExtraction]) -> StructuralAnalysisResult:
@@ -131,6 +137,7 @@ class BookStructuralAnalyzer:
             positions,
             node_ids_by_block,
         )
+        container_candidates = self._detect_container_candidates(positions)
         normalized_furniture = self._mark_repeated_furniture(furniture)
         return StructuralAnalysisResult(
             document=BookDocument(
@@ -139,6 +146,7 @@ class BookStructuralAnalyzer:
             ),
             running_furniture=normalized_furniture,
             unresolved_blocks=tuple(unresolved),
+            container_candidates=container_candidates,
         )
 
     def _validate_page_ids(self, pages: Sequence[PageExtraction]) -> None:
@@ -233,7 +241,7 @@ class BookStructuralAnalyzer:
         self,
         positions: Sequence[_EvidencePosition],
     ) -> tuple[list[FlowNode], dict[str, str], list[PageBlockEvidence]]:
-        """Build supported logical nodes and group explicit list-item runs."""
+        """Build supported logical nodes and resolve explicit containers."""
         nodes: list[FlowNode] = []
         node_ids_by_block: dict[str, str] = {}
         unresolved: list[PageBlockEvidence] = []
@@ -241,14 +249,68 @@ class BookStructuralAnalyzer:
 
         while index < len(positions):
             position = positions[index]
-            if position.block.role_hint in _LIST_ROLES:
+            role = position.block.role_hint
+
+            if role in _LIST_ROLES:
                 run_end = self._list_run_end(positions, index)
                 run = positions[index:run_end]
                 list_node = self._list_node(run)
                 nodes.append(list_node)
-                for item, item_position in zip(list_node.items, run, strict=True):
+                for item, item_position in zip(
+                    list_node.items, run, strict=True
+                ):
                     node_ids_by_block[item_position.block.block_id] = item.node_id
                 index = run_end
+                continue
+
+            if role is BlockRoleHint.QUOTE:
+                run_end = self._same_role_run_end(
+                    positions, index, BlockRoleHint.QUOTE
+                )
+                run = positions[index:run_end]
+                quotation = self._quotation_node(run)
+                nodes.append(quotation)
+                for item_position in run:
+                    node_ids_by_block[item_position.block.block_id] = (
+                        quotation.node_id
+                    )
+                index = run_end
+                continue
+
+            if role is BlockRoleHint.VERSE:
+                run_end = self._same_role_run_end(
+                    positions, index, BlockRoleHint.VERSE
+                )
+                run = positions[index:run_end]
+                verse = self._verse_group_node(run)
+                nodes.append(verse)
+                for item_position in run:
+                    node_ids_by_block[item_position.block.block_id] = verse.node_id
+                index = run_end
+                continue
+
+            if role is BlockRoleHint.IMAGE:
+                caption_position = self._following_caption(positions, index)
+                consumed = 2 if caption_position is not None else 1
+                if position.block.region is None:
+                    unresolved.append(position.block)
+                    if caption_position is not None:
+                        unresolved.append(caption_position.block)
+                    index += consumed
+                    continue
+                figure = self._figure_node(position, caption_position)
+                nodes.append(figure)
+                node_ids_by_block[position.block.block_id] = figure.node_id
+                if caption_position is not None:
+                    node_ids_by_block[caption_position.block.block_id] = (
+                        figure.node_id
+                    )
+                index += consumed
+                continue
+
+            if role is BlockRoleHint.CAPTION:
+                unresolved.append(position.block)
+                index += 1
                 continue
 
             node = self._single_block_node(position)
@@ -260,6 +322,124 @@ class BookStructuralAnalyzer:
             index += 1
 
         return nodes, node_ids_by_block, unresolved
+
+    def _same_role_run_end(
+        self,
+        positions: Sequence[_EvidencePosition],
+        start: int,
+        role: BlockRoleHint,
+    ) -> int:
+        """Return the end of a contiguous explicit container-role run."""
+        index = start + 1
+        start_page_index = positions[start].page_index
+        while index < len(positions):
+            current = positions[index]
+            if current.page_index != start_page_index:
+                break
+            if current.block.role_hint is not role:
+                break
+            index += 1
+        return index
+
+    def _quotation_node(
+        self,
+        run: Sequence[_EvidencePosition],
+    ) -> QuotationNode:
+        """Group contiguous explicit quote evidence into one quotation."""
+        children = tuple(
+            ParagraphNode(
+                node_id=_node_id(position.block.block_id, "quote-paragraph"),
+                spans=_document_spans(position.page, position.block),
+                provenance=(_source_fragment(position.page, position.block),),
+            )
+            for position in run
+        )
+        provenance = tuple(
+            fragment
+            for child in children
+            for fragment in child.provenance
+        )
+        return QuotationNode(
+            node_id=_node_id(run[0].block.block_id, "quotation"),
+            children=children,
+            provenance=provenance,
+        )
+
+    def _verse_group_node(
+        self,
+        run: Sequence[_EvidencePosition],
+    ) -> VerseNode:
+        """Group contiguous verse evidence while preserving semantic lines."""
+        block_verses = tuple(
+            _verse_node(position.page, position.block) for position in run
+        )
+        return VerseNode(
+            node_id=_node_id(run[0].block.block_id, "verse"),
+            lines=tuple(
+                line
+                for verse in block_verses
+                for line in verse.lines
+            ),
+            provenance=tuple(
+                fragment
+                for verse in block_verses
+                for fragment in verse.provenance
+            ),
+        )
+
+    def _following_caption(
+        self,
+        positions: Sequence[_EvidencePosition],
+        image_index: int,
+    ) -> _EvidencePosition | None:
+        """Return an immediately following same-page caption, if present."""
+        next_index = image_index + 1
+        if next_index >= len(positions):
+            return None
+        image = positions[image_index]
+        candidate = positions[next_index]
+        if candidate.page_index != image.page_index:
+            return None
+        if candidate.block.role_hint is not BlockRoleHint.CAPTION:
+            return None
+        return candidate
+
+    def _figure_node(
+        self,
+        image_position: _EvidencePosition,
+        caption_position: _EvidencePosition | None,
+    ) -> FigureNode:
+        """Resolve an image region and optional adjacent caption as a figure."""
+        image_block = image_position.block
+        if image_block.region is None:
+            raise ValueError("figure image evidence requires a source region")
+        image = ImageNode(
+            node_id=_node_id(image_block.block_id, "image"),
+            source_region=image_block.region,
+            asset_id=None,
+            provenance=(
+                _source_fragment(image_position.page, image_block),
+            ),
+        )
+        caption = None
+        if caption_position is not None:
+            caption_block = caption_position.block
+            caption = CaptionNode(
+                node_id=_node_id(caption_block.block_id, "caption"),
+                spans=_document_spans(caption_position.page, caption_block),
+                provenance=(
+                    _source_fragment(caption_position.page, caption_block),
+                ),
+            )
+        provenance = image.provenance + (
+            caption.provenance if caption is not None else ()
+        )
+        return FigureNode(
+            node_id=_node_id(image_block.block_id, "figure"),
+            image=image,
+            caption=caption,
+            provenance=provenance,
+        )
 
     def _list_run_end(
         self,
@@ -332,19 +512,6 @@ class BookStructuralAnalyzer:
                 level=block.heading_level_hint,
                 provenance=provenance,
             )
-        if block.role_hint is BlockRoleHint.QUOTE:
-            paragraph = ParagraphNode(
-                node_id=_node_id(block.block_id, "quote-paragraph"),
-                spans=spans,
-                provenance=provenance,
-            )
-            return QuotationNode(
-                node_id=_node_id(block.block_id, "quotation"),
-                children=(paragraph,),
-                provenance=provenance,
-            )
-        if block.role_hint is BlockRoleHint.VERSE:
-            return _verse_node(position.page, block)
         if block.role_hint is BlockRoleHint.FOOTNOTE:
             return FootnoteNode(
                 node_id=_node_id(block.block_id, "footnote"),
@@ -358,6 +525,48 @@ class BookStructuralAnalyzer:
                 provenance=provenance,
             )
         return None
+
+    def _detect_container_candidates(
+        self,
+        positions: Sequence[_EvidencePosition],
+    ) -> tuple[ContainerResolutionCandidate, ...]:
+        """Record strong inset-opening evidence without guessing its extent."""
+        candidates: list[ContainerResolutionCandidate] = []
+        for index, position in enumerate(positions):
+            block = position.block
+            if block.role_hint is not BlockRoleHint.HEADING:
+                continue
+            if block.heading_role_hint is not HeadingRoleHint.GENRE_LABEL:
+                continue
+
+            source_block_ids = [block.block_id]
+            reasons = ["genre-label heading suggests embedded material"]
+            confidence = 0.75
+            if index > 0:
+                previous = positions[index - 1]
+                if (
+                    previous.page_index == position.page_index
+                    and previous.block.role_hint is BlockRoleHint.HEADING
+                ):
+                    source_block_ids.insert(0, previous.block.block_id)
+                    reasons.append(
+                        "genre label is immediately preceded by a title-like heading"
+                    )
+                    confidence = 0.90
+
+            candidates.append(
+                ContainerResolutionCandidate(
+                    candidate_id=(
+                        f"{source_block_ids[0]}:candidate:inset"
+                    ),
+                    kind=ContainerCandidateKind.INSET,
+                    role=InsetRole.UNKNOWN,
+                    source_block_ids=tuple(source_block_ids),
+                    confidence=confidence,
+                    reasons=tuple(reasons),
+                )
+            )
+        return tuple(candidates)
 
     def _detect_continuations(
         self,
@@ -383,6 +592,8 @@ class BookStructuralAnalyzer:
             source_id = node_ids_by_block.get(left.block_id)
             target_id = node_ids_by_block.get(right.block_id)
             if source_id is None or target_id is None:
+                continue
+            if source_id == target_id:
                 continue
             candidate = _continuation_relationship(
                 left,

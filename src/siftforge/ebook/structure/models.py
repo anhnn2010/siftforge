@@ -10,7 +10,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import StrEnum
 
-from siftforge.ebook.evidence import MarkerEvidence, SourceTypography
+from siftforge.ebook.evidence import (
+    MarkerEvidence,
+    NormalizedRegion,
+    SourceTypography,
+)
 
 
 class SemanticMark(StrEnum):
@@ -48,6 +52,12 @@ class InsetRole(StrEnum):
     EMBEDDED_STORY = "embedded_story"
     EMBEDDED_EXCERPT = "embedded_excerpt"
     UNKNOWN = "unknown"
+
+
+class ContainerCandidateKind(StrEnum):
+    """Higher-level container kinds awaiting semantic boundary resolution."""
+
+    INSET = "inset"
 
 
 class RelationshipKind(StrEnum):
@@ -132,10 +142,11 @@ class FootnoteNode:
 
 @dataclass(frozen=True, slots=True)
 class ImageNode:
-    """Renderable image asset derived from source page evidence."""
+    """Logical image backed by a source region and optional derived asset."""
 
     node_id: str
-    asset_id: str
+    source_region: NormalizedRegion
+    asset_id: str | None = None
     provenance: tuple[SourceFragment, ...] = ()
 
 
@@ -187,7 +198,7 @@ class QuotationNode:
 
 @dataclass(frozen=True, slots=True)
 class FigureNode:
-    """Renderable image and its optional caption as one logical figure."""
+    """Logical figure containing one source-backed image and optional caption."""
 
     node_id: str
     image: ImageNode
@@ -216,6 +227,23 @@ type FlowNode = (
     | FootnoteNode
     | AttributionNode
 )
+
+
+@dataclass(frozen=True, slots=True)
+class ContainerResolutionCandidate:
+    """Conservative evidence that a higher-level container may begin here.
+
+    A candidate records only the evidence that can be established without
+    guessing the container's full extent. A later semantic resolver may accept
+    it and determine boundaries, or leave the source flow unchanged.
+    """
+
+    candidate_id: str
+    kind: ContainerCandidateKind
+    role: InsetRole
+    source_block_ids: tuple[str, ...]
+    confidence: float
+    reasons: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)

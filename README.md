@@ -368,3 +368,57 @@ provenance back to the exact page/block/span evidence that produced it.
 The existing `ebook extract-page` CLI is unchanged in this milestone. 1F-5 adds
 book-level library behavior and tests only; a multi-page structural CLI/artifact
 path can be added after the resolver behavior is proven.
+
+## Milestone 1F-6 - Explicit structural container resolution
+
+Milestone 1F-6 extends the deterministic book pass to resolve containers that
+are already explicit in v5 page evidence. It deliberately does not add a new AI
+call and does not infer hidden semantic boundaries from language-specific text.
+
+The analyzer now resolves:
+
+- **quotation runs**: adjacent same-page `quote` blocks become one
+  `QuotationNode` containing paragraph children; a physical page boundary is
+  kept unresolved unless continuation evidence supports a later merge
+- **verse runs**: adjacent same-page `verse` blocks become one `VerseNode` while
+  keeping each semantic `VerseLineNode` and its source provenance
+- **figures**: an `image` block with a normalized source region becomes a
+  `FigureNode`; an immediately following same-page `caption` is nested inside
+  the figure, allowing page-116-style `image/caption/image/caption` evidence to
+  become two independent figures
+
+`ImageNode` now stores the normalized `source_region` directly. Its `asset_id`
+is optional because this milestone resolves logical figure membership but does
+not yet crop/materialize the derived image file. A later asset step can use the
+region to produce the actual figure asset without changing the structural
+association.
+
+The resolver remains intentionally conservative when evidence is incomplete:
+
+- an image without a source region is not given invented crop geometry; the
+  image and immediately following caption remain in `unresolved_blocks`
+- an orphan caption remains unresolved rather than attaching to a distant image
+- a cross-page quotation is not silently merged; it may remain as two logical
+  quotation containers connected by a scored `CONTINUES_TO` candidate
+
+Embedded content needs a different treatment. Page 348 provides strong local
+opening evidence through a `genre_label`, but the current page contract does not
+reliably expose where that fable ends. Pages 397-398 are even more important:
+the embedded excerpt is recognizable from meaning and author voice, not from a
+stable visual role. The deterministic analyzer therefore records a
+`ContainerResolutionCandidate` for strong genre-label openings while refusing
+to consume following body paragraphs or add Vietnamese phrase-matching rules.
+Unstyled embedded excerpts remain ordinary flow until a later semantic
+container resolver can establish their boundaries.
+
+This preserves the core boundary:
+
+```text
+page evidence says what was observed
+        ↓
+deterministic structural pass resolves explicit structure
+        ↓
+semantic resolver handles genuinely contextual boundaries
+```
+
+The `ebook extract-page` CLI remains unchanged.

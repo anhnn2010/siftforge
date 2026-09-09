@@ -2,8 +2,10 @@
 
 from siftforge.ebook.evidence import (
     BlockRoleHint,
+    HeadingRoleHint,
     MarkerEvidence,
     MarkerKind,
+    NormalizedRegion,
     PageBlockEvidence,
     PageExtraction,
     SourceTypography,
@@ -18,9 +20,13 @@ from siftforge.ebook.models import (
 )
 from siftforge.ebook.structure import (
     BookStructuralAnalyzer,
+    ContainerCandidateKind,
+    FigureNode,
+    InsetRole,
     ListKind,
     ListNode,
     ParagraphNode,
+    QuotationNode,
     RelationshipKind,
     VerseNode,
 )
@@ -48,6 +54,8 @@ def _block(
     language: str | None = "vi",
     marker: MarkerEvidence | None = None,
     semantic_line_break_after: bool = False,
+    heading_role_hint: HeadingRoleHint = HeadingRoleHint.UNKNOWN,
+    region: NormalizedRegion | None = None,
 ) -> PageBlockEvidence:
     """Build one deterministic page-evidence block for tests."""
     block_id = f"{page_id}:block:{index:04d}"
@@ -64,7 +72,9 @@ def _block(
         role_hint=role,
         spans=(span,),
         dominant_language=language,
+        heading_role_hint=heading_role_hint,
         marker=marker,
+        region=region,
     )
 
 
@@ -529,3 +539,309 @@ def test_logical_span_provenance_points_to_only_its_source_span() -> None:
     assert paragraph.spans[1].provenance[0].span_ids == (
         f"{block_id}:span:0002",
     )
+
+
+def test_same_page_quote_blocks_group_into_one_quotation() -> None:
+    """Adjacent quote blocks on one page should share one quotation container."""
+    page = _page(
+        87,
+        _block(
+            "page-0087",
+            1,
+            BlockRoleHint.QUOTE,
+            "“Đoạn trích thứ nhất.",
+        ),
+        _block(
+            "page-0087",
+            2,
+            BlockRoleHint.QUOTE,
+            "Đoạn trích thứ hai.”",
+        ),
+    )
+
+    result = BookStructuralAnalyzer().analyze((page,))
+
+    assert len(result.document.nodes) == 1
+    quotation = result.document.nodes[0]
+    assert isinstance(quotation, QuotationNode)
+    assert len(quotation.children) == 2
+    assert [child.spans[0].text for child in quotation.children] == [
+        "“Đoạn trích thứ nhất.",
+        "Đoạn trích thứ hai.”",
+    ]
+
+
+def test_cross_page_quote_blocks_remain_candidates_until_resolved() -> None:
+    """Physical-page quote boundaries should not be merged automatically."""
+    first = _page(
+        87,
+        _block(
+            "page-0087",
+            1,
+            BlockRoleHint.QUOTE,
+            "“Đoạn trích bắt đầu và còn tiếp",
+        ),
+    )
+    second = _page(
+        88,
+        _block(
+            "page-0088",
+            1,
+            BlockRoleHint.QUOTE,
+            "phần tiếp theo của cùng đoạn trích.”",
+        ),
+    )
+
+    result = BookStructuralAnalyzer().analyze((first, second))
+
+    assert len(result.document.nodes) == 2
+    assert all(isinstance(node, QuotationNode) for node in result.document.nodes)
+    assert len(result.continuation_candidates) == 1
+    assert result.continuation_candidates[0].confidence == 0.99
+
+
+def test_consecutive_same_page_verse_blocks_group_into_one_verse() -> None:
+    """Explicit adjacent verse blocks on one page should share a container."""
+    page = _page(
+        68,
+        _block(
+            "page-0068",
+            1,
+            BlockRoleHint.VERSE,
+            "Mẹ cần con để trưởng thành,",
+        ),
+        _block(
+            "page-0068",
+            2,
+            BlockRoleHint.VERSE,
+            "Con là sức mạnh trong vành nôi ngoan.",
+        ),
+    )
+
+    result = BookStructuralAnalyzer().analyze((page,))
+
+    assert len(result.document.nodes) == 1
+    verse = result.document.nodes[0]
+    assert isinstance(verse, VerseNode)
+    assert [line.spans[0].text for line in verse.lines] == [
+        "Mẹ cần con để trưởng thành,",
+        "Con là sức mạnh trong vành nôi ngoan.",
+    ]
+
+
+def test_image_region_and_adjacent_caption_resolve_to_figure() -> None:
+    """An image region followed by a caption should become one figure."""
+    region = NormalizedRegion(x=0.125, y=0.08, width=0.805, height=0.338)
+    page = _page(
+        116,
+        _block(
+            "page-0116",
+            1,
+            BlockRoleHint.IMAGE,
+            "",
+            language=None,
+            region=region,
+        ),
+        _block(
+            "page-0116",
+            2,
+            BlockRoleHint.CAPTION,
+            "Kỷ niệm Minh Khuê tròn 2 tuổi (1/6/1999)",
+        ),
+    )
+
+    result = BookStructuralAnalyzer().analyze((page,))
+
+    assert len(result.document.nodes) == 1
+    figure = result.document.nodes[0]
+    assert isinstance(figure, FigureNode)
+    assert figure.image.source_region == region
+    assert figure.image.asset_id is None
+    assert figure.caption is not None
+    assert figure.caption.spans[0].text == (
+        "Kỷ niệm Minh Khuê tròn 2 tuổi (1/6/1999)"
+    )
+    assert result.unresolved_blocks == ()
+
+
+def test_multiple_image_caption_pairs_remain_separate_figures() -> None:
+    """Page-116-like evidence should create two independent figures."""
+    first_region = NormalizedRegion(x=0.1, y=0.1, width=0.8, height=0.3)
+    second_region = NormalizedRegion(x=0.1, y=0.5, width=0.8, height=0.3)
+    page = _page(
+        116,
+        _block(
+            "page-0116",
+            1,
+            BlockRoleHint.IMAGE,
+            "",
+            language=None,
+            region=first_region,
+        ),
+        _block(
+            "page-0116",
+            2,
+            BlockRoleHint.CAPTION,
+            "Ảnh thứ nhất",
+        ),
+        _block(
+            "page-0116",
+            3,
+            BlockRoleHint.IMAGE,
+            "",
+            language=None,
+            region=second_region,
+        ),
+        _block(
+            "page-0116",
+            4,
+            BlockRoleHint.CAPTION,
+            "Ảnh thứ hai",
+        ),
+    )
+
+    result = BookStructuralAnalyzer().analyze((page,))
+
+    assert len(result.document.nodes) == 2
+    assert all(isinstance(node, FigureNode) for node in result.document.nodes)
+    first, second = result.document.nodes
+    assert isinstance(first, FigureNode)
+    assert isinstance(second, FigureNode)
+    assert first.caption is not None
+    assert second.caption is not None
+    assert first.caption.spans[0].text == "Ảnh thứ nhất"
+    assert second.caption.spans[0].text == "Ảnh thứ hai"
+
+
+def test_image_without_region_keeps_image_and_caption_unresolved() -> None:
+    """Figure resolution must not invent crop geometry absent from evidence."""
+    page = _page(
+        116,
+        _block(
+            "page-0116",
+            1,
+            BlockRoleHint.IMAGE,
+            "",
+            language=None,
+        ),
+        _block(
+            "page-0116",
+            2,
+            BlockRoleHint.CAPTION,
+            "Một chú thích",
+        ),
+    )
+
+    result = BookStructuralAnalyzer().analyze((page,))
+
+    assert result.document.nodes == ()
+    assert [block.role_hint for block in result.unresolved_blocks] == [
+        BlockRoleHint.IMAGE,
+        BlockRoleHint.CAPTION,
+    ]
+
+
+def test_genre_label_records_inset_opening_candidate_without_swallowing_body() -> None:
+    """Genre-label evidence should surface an inset candidate, not guess extent."""
+    page = _page(
+        348,
+        _block(
+            "page-0348",
+            1,
+            BlockRoleHint.HEADING,
+            "Đừng so sánh",
+        ),
+        _block(
+            "page-0348",
+            2,
+            BlockRoleHint.HEADING,
+            "(Truyện ngụ ngôn)",
+            heading_role_hint=HeadingRoleHint.GENRE_LABEL,
+        ),
+        _block(
+            "page-0348",
+            3,
+            BlockRoleHint.PARAGRAPH,
+            "Một chú cún bắt đầu câu chuyện.",
+        ),
+    )
+
+    result = BookStructuralAnalyzer().analyze((page,))
+
+    assert len(result.document.nodes) == 3
+    assert len(result.container_candidates) == 1
+    candidate = result.container_candidates[0]
+    assert candidate.kind is ContainerCandidateKind.INSET
+    assert candidate.role is InsetRole.UNKNOWN
+    assert candidate.confidence == 0.90
+    assert candidate.source_block_ids == (
+        "page-0348:block:0001",
+        "page-0348:block:0002",
+    )
+    assert "title-like heading" in candidate.reasons[1]
+
+
+def test_unstyled_embedded_excerpt_is_not_guessed_from_language_specific_text() -> None:
+    """Page-397-like prose cues should remain prose without explicit evidence."""
+    page = _page(
+        397,
+        _block(
+            "page-0397",
+            1,
+            BlockRoleHint.PARAGRAPH,
+            "Tôi xin trích câu chuyện của bạn Nguyễn Thanh Nga:",
+        ),
+        _block(
+            "page-0397",
+            2,
+            BlockRoleHint.PARAGRAPH,
+            "Thời cắp sách đến trường...",
+        ),
+    )
+
+    result = BookStructuralAnalyzer().analyze((page,))
+
+    assert len(result.document.nodes) == 2
+    assert result.container_candidates == ()
+
+
+def test_image_region_without_caption_still_resolves_to_figure() -> None:
+    """A source-backed image may form a figure without a caption."""
+    region = NormalizedRegion(x=0.1, y=0.2, width=0.7, height=0.5)
+    page = _page(
+        28,
+        _block(
+            "page-0028",
+            1,
+            BlockRoleHint.IMAGE,
+            "",
+            language=None,
+            region=region,
+        ),
+    )
+
+    result = BookStructuralAnalyzer().analyze((page,))
+
+    assert len(result.document.nodes) == 1
+    figure = result.document.nodes[0]
+    assert isinstance(figure, FigureNode)
+    assert figure.caption is None
+    assert figure.image.source_region == region
+
+
+def test_orphan_caption_stays_unresolved() -> None:
+    """A caption without an adjacent image must not attach to distant content."""
+    page = _page(
+        28,
+        _block(
+            "page-0028",
+            1,
+            BlockRoleHint.CAPTION,
+            "Chú thích không có ảnh tương ứng.",
+        ),
+    )
+
+    result = BookStructuralAnalyzer().analyze((page,))
+
+    assert result.document.nodes == ()
+    assert result.unresolved_blocks == (page.blocks[0],)
