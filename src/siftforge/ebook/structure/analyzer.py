@@ -1,9 +1,9 @@
 """Deterministic first-pass structural analysis for ebook page evidence.
 
-Milestone 1F-6 keeps the pass deterministic while resolving containers that
-are explicit in page evidence: lists, quotation runs, verse runs, and figures.
-Ambiguous higher-level structures such as embedded excerpts remain candidates
-rather than being expanded from language-specific heuristics.
+Milestone 1F-7 keeps the pass deterministic while resolving explicit
+containers and evidence-backed semantic relationships. Cross-page and
+contextual ambiguity remains scored or unresolved instead of being guessed
+from language-specific content.
 """
 
 from __future__ import annotations
@@ -20,6 +20,7 @@ from siftforge.ebook.evidence import (
     PageExtraction,
     TextSpanEvidence,
 )
+from siftforge.ebook.models import VerticalPosition
 
 from .models import (
     AttributionNode,
@@ -35,6 +36,7 @@ from .models import (
     HeadingNode,
     HeadingRole,
     ImageNode,
+    InsetNode,
     InsetRole,
     ListItemNode,
     ListKind,
@@ -132,11 +134,17 @@ class BookStructuralAnalyzer:
         self._validate_page_ids(pages)
         positions, furniture = self._partition_page_evidence(pages)
         nodes, node_ids_by_block, unresolved = self._build_nodes(positions)
-        relationships = self._detect_continuations(
+        continuation_relationships = self._detect_continuations(
             pages,
             positions,
             node_ids_by_block,
         )
+        semantic_relationships = self._resolve_semantic_relationships(
+            positions,
+            nodes,
+            node_ids_by_block,
+        )
+        relationships = continuation_relationships + semantic_relationships
         container_candidates = self._detect_container_candidates(positions)
         normalized_furniture = self._mark_repeated_furniture(furniture)
         return StructuralAnalysisResult(
@@ -264,9 +272,7 @@ class BookStructuralAnalyzer:
                 continue
 
             if role is BlockRoleHint.QUOTE:
-                run_end = self._same_role_run_end(
-                    positions, index, BlockRoleHint.QUOTE
-                )
+                run_end = self._quotation_run_end(positions, index)
                 run = positions[index:run_end]
                 quotation = self._quotation_node(run)
                 nodes.append(quotation)
@@ -338,6 +344,39 @@ class BookStructuralAnalyzer:
                 break
             if current.block.role_hint is not role:
                 break
+            index += 1
+        return index
+
+    def _quotation_run_end(
+        self,
+        positions: Sequence[_EvidencePosition],
+        start: int,
+    ) -> int:
+        """Return the end of one same-language quotation run on one page.
+
+        Known language changes split adjacent quote evidence so a later
+        relationship pass can retain bilingual original/translation pairs as
+        separate logical quotation containers. Unknown language does not force
+        a split.
+        """
+        index = start + 1
+        start_page_index = positions[start].page_index
+        previous_language = positions[start].block.dominant_language
+        while index < len(positions):
+            current = positions[index]
+            if current.page_index != start_page_index:
+                break
+            if current.block.role_hint is not BlockRoleHint.QUOTE:
+                break
+            current_language = current.block.dominant_language
+            if (
+                previous_language is not None
+                and current_language is not None
+                and previous_language != current_language
+            ):
+                break
+            if current_language is not None:
+                previous_language = current_language
             index += 1
         return index
 
@@ -516,6 +555,7 @@ class BookStructuralAnalyzer:
             return FootnoteNode(
                 node_id=_node_id(block.block_id, "footnote"),
                 spans=spans,
+                label=_footnote_body_label(block),
                 provenance=provenance,
             )
         if block.role_hint is BlockRoleHint.ATTRIBUTION:
@@ -525,6 +565,156 @@ class BookStructuralAnalyzer:
                 provenance=provenance,
             )
         return None
+
+    def _resolve_semantic_relationships(
+        self,
+        positions: Sequence[_EvidencePosition],
+        nodes: Sequence[FlowNode],
+        node_ids_by_block: dict[str, str],
+    ) -> tuple[DocumentRelationship, ...]:
+        """Resolve relationships supported by explicit page-local evidence."""
+        relationships: list[DocumentRelationship] = []
+        relationships.extend(
+            self._resolve_footnote_references(positions, node_ids_by_block)
+        )
+        relationships.extend(self._resolve_attributions(nodes))
+        relationships.extend(self._resolve_translation_pairs(nodes))
+        return tuple(relationships)
+
+    def _resolve_footnote_references(
+        self,
+        positions: Sequence[_EvidencePosition],
+        node_ids_by_block: dict[str, str],
+    ) -> tuple[DocumentRelationship, ...]:
+        """Link matching superscript references to same-page footnote bodies."""
+        targets: dict[tuple[str, str], list[str]] = {}
+        for position in positions:
+            block = position.block
+            if block.role_hint is not BlockRoleHint.FOOTNOTE:
+                continue
+            label = _footnote_body_label(block)
+            target_id = node_ids_by_block.get(block.block_id)
+            if label is None or target_id is None:
+                continue
+            key = (position.page.page_id, label.casefold())
+            targets.setdefault(key, []).append(target_id)
+
+        relationships: list[DocumentRelationship] = []
+        for position in positions:
+            block = position.block
+            if block.role_hint is BlockRoleHint.FOOTNOTE:
+                continue
+            for span in block.spans:
+                label = _footnote_reference_label(span)
+                if label is None:
+                    continue
+                key = (position.page.page_id, label.casefold())
+                matching_targets = targets.get(key, [])
+                if len(matching_targets) != 1:
+                    continue
+                target_id = matching_targets[0]
+                relationships.append(
+                    DocumentRelationship(
+                        relationship_id=(
+                            f"{span.span_id}:relationship:footnote-ref:"
+                            f"{target_id}"
+                        ),
+                        kind=RelationshipKind.FOOTNOTE_REF,
+                        source_id=span.span_id,
+                        target_id=target_id,
+                        confidence=1.0,
+                        reasons=(
+                            "superscript reference label matches a unique "
+                            "same-page footnote label",
+                        ),
+                    )
+                )
+        return tuple(relationships)
+
+    def _resolve_attributions(
+        self,
+        nodes: Sequence[FlowNode],
+    ) -> tuple[DocumentRelationship, ...]:
+        """Link explicit attribution nodes to one unambiguous adjacent work."""
+        relationships: list[DocumentRelationship] = []
+        for index, node in enumerate(nodes):
+            if not isinstance(node, AttributionNode):
+                continue
+            candidates: list[FlowNode] = []
+            if index > 0:
+                previous = nodes[index - 1]
+                if _is_attributable_neighbor(node, previous):
+                    candidates.append(previous)
+            if index + 1 < len(nodes):
+                following = nodes[index + 1]
+                if _is_attributable_neighbor(node, following):
+                    candidates.append(following)
+            if len(candidates) != 1:
+                continue
+            target = candidates[0]
+            relationships.append(
+                DocumentRelationship(
+                    relationship_id=(
+                        f"{node.node_id}:relationship:attribution-of:"
+                        f"{target.node_id}"
+                    ),
+                    kind=RelationshipKind.ATTRIBUTION_OF,
+                    source_id=node.node_id,
+                    target_id=target.node_id,
+                    confidence=0.95,
+                    reasons=(
+                        "explicit attribution is adjacent to one "
+                        "attributable same-page container",
+                    ),
+                )
+            )
+        return tuple(relationships)
+
+    def _resolve_translation_pairs(
+        self,
+        nodes: Sequence[FlowNode],
+    ) -> tuple[DocumentRelationship, ...]:
+        """Emit conservative translation candidates for bilingual quote pairs."""
+        relationships: list[DocumentRelationship] = []
+        for index in range(1, len(nodes)):
+            original = nodes[index - 1]
+            translated = nodes[index]
+            if not isinstance(original, QuotationNode):
+                continue
+            if not isinstance(translated, QuotationNode):
+                continue
+            if not _nodes_share_one_page(original, translated):
+                continue
+            original_language = _logical_node_language(original)
+            translated_language = _logical_node_language(translated)
+            if original_language is None or translated_language is None:
+                continue
+            if original_language == translated_language:
+                continue
+            if not _translation_lengths_are_plausible(original, translated):
+                continue
+            confidence = 0.80
+            reasons = [
+                "adjacent quotation containers use different known languages",
+                "both quotations occur on the same physical page",
+            ]
+            if _pair_has_adjacent_attribution(nodes, index - 1, index):
+                confidence = 0.90
+                reasons.append("quotation pair shares adjacent attribution context")
+            relationships.append(
+                DocumentRelationship(
+                    relationship_id=(
+                        f"{translated.node_id}:relationship:translation-of:"
+                        f"{original.node_id}"
+                    ),
+                    kind=RelationshipKind.TRANSLATION_OF,
+                    source_id=translated.node_id,
+                    target_id=original.node_id,
+                    confidence=confidence,
+                    reasons=tuple(reasons),
+                )
+            )
+        return tuple(relationships)
 
     def _detect_container_candidates(
         self,
@@ -604,6 +794,107 @@ class BookStructuralAnalyzer:
             if candidate is not None:
                 candidates.append(candidate)
         return tuple(candidates)
+
+
+_FOOTNOTE_LABEL_RE = re.compile(r"^(?:\d{1,3}|[A-Za-z]|[*†‡]+)$")
+
+
+def _normalize_footnote_label(text: str) -> str | None:
+    """Return a compact footnote label when text is label-shaped."""
+    label = text.strip().strip("()[]{}")
+    label = label.rstrip(".").strip()
+    if not label or _FOOTNOTE_LABEL_RE.fullmatch(label) is None:
+        return None
+    return label
+
+
+def _footnote_body_label(block: PageBlockEvidence) -> str | None:
+    """Extract an explicit superscript label at the start of a footnote body."""
+    for span in block.spans:
+        if not span.text.strip():
+            continue
+        if span.source_typography.vertical_position is not VerticalPosition.SUPERSCRIPT:
+            return None
+        return _normalize_footnote_label(span.text)
+    return None
+
+
+def _footnote_reference_label(span: TextSpanEvidence) -> str | None:
+    """Return a candidate inline footnote label from superscript evidence."""
+    if span.source_typography.vertical_position is not VerticalPosition.SUPERSCRIPT:
+        return None
+    return _normalize_footnote_label(span.text)
+
+
+def _is_attributable_neighbor(
+    attribution: AttributionNode,
+    target: FlowNode,
+) -> bool:
+    """Return whether an adjacent node is a supported same-page attribution target."""
+    if not isinstance(target, QuotationNode | VerseNode | InsetNode):
+        return False
+    return _nodes_share_one_page(attribution, target)
+
+
+def _node_page_ids(node: FlowNode) -> frozenset[str]:
+    """Return physical page identities represented by one logical node."""
+    return frozenset(fragment.page_id for fragment in node.provenance)
+
+
+def _nodes_share_one_page(left: FlowNode, right: FlowNode) -> bool:
+    """Return whether both nodes are sourced from the same single page."""
+    left_pages = _node_page_ids(left)
+    right_pages = _node_page_ids(right)
+    return len(left_pages) == 1 and left_pages == right_pages
+
+
+def _logical_node_language(node: QuotationNode) -> str | None:
+    """Return one unambiguous non-null language for a quotation container."""
+    languages = {
+        span.language
+        for child in node.children
+        for span in child.spans
+        if span.language is not None
+    }
+    if len(languages) != 1:
+        return None
+    return next(iter(languages))
+
+
+def _logical_node_text(node: QuotationNode) -> str:
+    """Return normalized readable text for a quotation container."""
+    return _collapse_whitespace(
+        " ".join(span.text for child in node.children for span in child.spans)
+    )
+
+
+def _translation_lengths_are_plausible(
+    original: QuotationNode,
+    translated: QuotationNode,
+) -> bool:
+    """Reject extreme-length adjacent quotes unlikely to be translations."""
+    original_length = len(_logical_node_text(original))
+    translated_length = len(_logical_node_text(translated))
+    if original_length == 0 or translated_length == 0:
+        return False
+    ratio = translated_length / original_length
+    return 0.4 <= ratio <= 2.5
+
+
+def _pair_has_adjacent_attribution(
+    nodes: Sequence[FlowNode],
+    original_index: int,
+    translated_index: int,
+) -> bool:
+    """Return whether a bilingual quotation pair touches an attribution node."""
+    if original_index > 0 and isinstance(
+        nodes[original_index - 1], AttributionNode
+    ):
+        return True
+    return (
+        translated_index + 1 < len(nodes)
+        and isinstance(nodes[translated_index + 1], AttributionNode)
+    )
 
 
 def _collapse_whitespace(text: str) -> str:

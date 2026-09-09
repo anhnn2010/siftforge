@@ -61,7 +61,11 @@ class ContainerCandidateKind(StrEnum):
 
 
 class RelationshipKind(StrEnum):
-    """Relations that cannot be expressed clearly by structural nesting alone."""
+    """Relations that cannot be expressed clearly by structural nesting alone.
+
+    Relationship confidence distinguishes exact evidence-backed links from
+    conservative candidates that still need later semantic confirmation.
+    """
 
     CONTINUES_TO = "continues_to"
     FOOTNOTE_REF = "footnote_ref"
@@ -132,7 +136,7 @@ class VerseLineNode:
 
 @dataclass(frozen=True, slots=True)
 class FootnoteNode:
-    """Logical footnote body addressable by inline footnote references."""
+    """Logical footnote body with an optional visible reference label."""
 
     node_id: str
     spans: tuple[DocumentTextSpan, ...]

@@ -422,3 +422,46 @@ semantic resolver handles genuinely contextual boundaries
 ```
 
 The `ebook extract-page` CLI remains unchanged.
+
+## Milestone 1F-7 - Evidence-backed semantic relationships
+
+Milestone 1F-7 extends the deterministic structural pass with semantic
+relationships that can be resolved from explicit page-local evidence without a
+new AI call. Relationships remain conservative: exact matches may be emitted
+with confidence `1.0`, while contextual bilingual-pair inference stays a scored
+candidate rather than silently rewriting document structure.
+
+The analyzer now resolves three relationship families:
+
+- **footnote references**: a label-shaped superscript span such as `1`, `2`,
+  `*`, `†`, or `‡` links to a unique same-page `FootnoteNode` whose visible
+  opening superscript label matches exactly. The relationship source is the
+  exact source span ID, so an inline reference inside a paragraph or heading can
+  point directly to the footnote body. Ambiguous duplicate labels remain
+  unlinked. Superscript suffixes such as the `th` in `13th` are not treated as
+  footnotes.
+- **attributions**: an explicit `attribution` evidence block links to one
+  unambiguous adjacent same-page quotation, verse, or inset container. If both
+  neighbors are plausible targets, no relation is guessed.
+- **translation candidates**: adjacent same-page quotation blocks with different
+  known languages remain separate `QuotationNode` values and may receive a
+  scored `TRANSLATION_OF` relationship. The later quotation is the candidate
+  translation of the immediately preceding quotation. Adjacent attribution
+  context raises confidence, but the result remains an evidence-backed
+  candidate rather than a language-specific hard-coded rule.
+
+Quotation grouping is now language-aware. Same-language adjacent quote blocks
+still group into one multi-paragraph quotation, preserving page-87-style
+behavior. A known language change splits the run so page-271-style bilingual
+original/translation pairs remain addressable as separate logical containers.
+Unknown language does not force a split.
+
+Footnote labels are also stored on `FootnoteNode`. This was validated against
+real historical extraction artifacts from pages 13 and 118: page 13 resolves
+both labels `1` and `2`, while page 118 resolves the superscript `1` embedded in
+a heading to its same-page footnote body.
+
+The resolver intentionally does **not** parse author names, dates, affiliation
+text, or translation semantics from prose. If v5 page evidence does not expose
+an explicit attribution or quote role, the structural pass leaves that content
+unchanged for a later semantic resolver.

@@ -19,9 +19,11 @@ from siftforge.ebook.models import (
     VerticalPosition,
 )
 from siftforge.ebook.structure import (
+    AttributionNode,
     BookStructuralAnalyzer,
     ContainerCandidateKind,
     FigureNode,
+    FootnoteNode,
     InsetRole,
     ListKind,
     ListNode,
@@ -845,3 +847,369 @@ def test_orphan_caption_stays_unresolved() -> None:
 
     assert result.document.nodes == ()
     assert result.unresolved_blocks == (page.blocks[0],)
+
+
+
+def test_superscript_reference_links_to_unique_same_page_footnote() -> None:
+    """A matching superscript label should link to one same-page footnote."""
+    page_id = "page-0118"
+    body_id = f"{page_id}:block:0001"
+    footnote_id = f"{page_id}:block:0002"
+    superscript = SourceTypography(
+        posture=FontPosture.ROMAN,
+        weight=FontWeight.NORMAL,
+        vertical_position=VerticalPosition.SUPERSCRIPT,
+        caps_style=CapsStyle.NORMAL,
+    )
+    body = PageBlockEvidence(
+        block_id=body_id,
+        sequence_index=0,
+        role_hint=BlockRoleHint.HEADING,
+        spans=(
+            TextSpanEvidence(
+                span_id=f"{body_id}:span:0001",
+                text="Rối loạn phát triển",
+                language="vi",
+                source_typography=_typography(),
+            ),
+            TextSpanEvidence(
+                span_id=f"{body_id}:span:0002",
+                text="1",
+                language=None,
+                source_typography=superscript,
+            ),
+        ),
+        dominant_language="vi",
+    )
+    footnote = PageBlockEvidence(
+        block_id=footnote_id,
+        sequence_index=1,
+        role_hint=BlockRoleHint.FOOTNOTE,
+        spans=(
+            TextSpanEvidence(
+                span_id=f"{footnote_id}:span:0001",
+                text="1",
+                language=None,
+                source_typography=superscript,
+            ),
+            TextSpanEvidence(
+                span_id=f"{footnote_id}:span:0002",
+                text="Nội dung chú thích.",
+                language="vi",
+                source_typography=_typography(),
+            ),
+        ),
+        dominant_language="vi",
+    )
+
+    result = BookStructuralAnalyzer().analyze((_page(118, body, footnote),))
+
+    footnote_node = result.document.nodes[1]
+    assert isinstance(footnote_node, FootnoteNode)
+    assert footnote_node.label == "1"
+    relationships = [
+        relation
+        for relation in result.document.relationships
+        if relation.kind is RelationshipKind.FOOTNOTE_REF
+    ]
+    assert len(relationships) == 1
+    relation = relationships[0]
+    assert relation.source_id == f"{body_id}:span:0002"
+    assert relation.target_id == footnote_node.node_id
+    assert relation.confidence == 1.0
+
+
+def test_superscript_suffix_is_not_treated_as_footnote_reference() -> None:
+    """A superscript suffix such as 'th' must not become a footnote link."""
+    page_id = "page-0018"
+    block_id = f"{page_id}:block:0001"
+    superscript = SourceTypography(
+        posture=FontPosture.ITALIC,
+        weight=FontWeight.NORMAL,
+        vertical_position=VerticalPosition.SUPERSCRIPT,
+        caps_style=CapsStyle.NORMAL,
+    )
+    block = PageBlockEvidence(
+        block_id=block_id,
+        sequence_index=0,
+        role_hint=BlockRoleHint.PARAGRAPH,
+        spans=(
+            TextSpanEvidence(
+                span_id=f"{block_id}:span:0001",
+                text="December 13",
+                language="en",
+                source_typography=_typography(FontPosture.ITALIC),
+            ),
+            TextSpanEvidence(
+                span_id=f"{block_id}:span:0002",
+                text="th",
+                language="en",
+                source_typography=superscript,
+            ),
+        ),
+        dominant_language="en",
+    )
+
+    result = BookStructuralAnalyzer().analyze((_page(18, block),))
+
+    assert all(
+        relation.kind is not RelationshipKind.FOOTNOTE_REF
+        for relation in result.document.relationships
+    )
+
+
+def test_duplicate_footnote_labels_are_not_linked_by_guessing() -> None:
+    """Ambiguous same-page footnote labels should remain unlinked."""
+    page_id = "page-0013"
+    ref_id = f"{page_id}:block:0001"
+    superscript = SourceTypography(
+        posture=FontPosture.ROMAN,
+        weight=FontWeight.NORMAL,
+        vertical_position=VerticalPosition.SUPERSCRIPT,
+        caps_style=CapsStyle.NORMAL,
+    )
+    reference = PageBlockEvidence(
+        block_id=ref_id,
+        sequence_index=0,
+        role_hint=BlockRoleHint.PARAGRAPH,
+        spans=(
+            TextSpanEvidence(
+                span_id=f"{ref_id}:span:0001",
+                text="Nội dung",
+                language="vi",
+                source_typography=_typography(),
+            ),
+            TextSpanEvidence(
+                span_id=f"{ref_id}:span:0002",
+                text="1",
+                language=None,
+                source_typography=superscript,
+            ),
+        ),
+        dominant_language="vi",
+    )
+
+    def footnote_block(index: int) -> PageBlockEvidence:
+        """Build one duplicate-label footnote fixture."""
+        block_id = f"{page_id}:block:{index:04d}"
+        return PageBlockEvidence(
+            block_id=block_id,
+            sequence_index=index - 1,
+            role_hint=BlockRoleHint.FOOTNOTE,
+            spans=(
+                TextSpanEvidence(
+                    span_id=f"{block_id}:span:0001",
+                    text="1",
+                    language=None,
+                    source_typography=superscript,
+                ),
+                TextSpanEvidence(
+                    span_id=f"{block_id}:span:0002",
+                    text=f"Chú thích {index}.",
+                    language="vi",
+                    source_typography=_typography(),
+                ),
+            ),
+            dominant_language="vi",
+        )
+
+    result = BookStructuralAnalyzer().analyze(
+        (_page(13, reference, footnote_block(2), footnote_block(3)),)
+    )
+
+    assert all(
+        relation.kind is not RelationshipKind.FOOTNOTE_REF
+        for relation in result.document.relationships
+    )
+
+
+def test_attribution_after_quote_links_to_quotation() -> None:
+    """An explicit attribution after one quote should link to that quote."""
+    page = _page(
+        94,
+        _block(
+            "page-0094",
+            1,
+            BlockRoleHint.QUOTE,
+            "“Bản chất của sự sống là tính phụ thuộc lẫn nhau”",
+        ),
+        _block(
+            "page-0094",
+            2,
+            BlockRoleHint.ATTRIBUTION,
+            "(Đức Phật)",
+        ),
+    )
+
+    result = BookStructuralAnalyzer().analyze((page,))
+
+    quotation, attribution = result.document.nodes
+    assert isinstance(quotation, QuotationNode)
+    assert isinstance(attribution, AttributionNode)
+    relationships = [
+        relation
+        for relation in result.document.relationships
+        if relation.kind is RelationshipKind.ATTRIBUTION_OF
+    ]
+    assert len(relationships) == 1
+    assert relationships[0].source_id == attribution.node_id
+    assert relationships[0].target_id == quotation.node_id
+
+
+def test_attribution_before_verse_links_to_verse() -> None:
+    """An explicit attribution before one verse should link to that verse."""
+    page = _page(
+        49,
+        _block(
+            "page-0049",
+            1,
+            BlockRoleHint.ATTRIBUTION,
+            "Đại Bàng Con (Dân ca Nga)",
+        ),
+        _block(
+            "page-0049",
+            2,
+            BlockRoleHint.VERSE,
+            "Một câu hát.",
+        ),
+    )
+
+    result = BookStructuralAnalyzer().analyze((page,))
+
+    attribution, verse = result.document.nodes
+    assert isinstance(attribution, AttributionNode)
+    assert isinstance(verse, VerseNode)
+    relation = next(
+        relation
+        for relation in result.document.relationships
+        if relation.kind is RelationshipKind.ATTRIBUTION_OF
+    )
+    assert relation.source_id == attribution.node_id
+    assert relation.target_id == verse.node_id
+
+
+def test_attribution_between_two_possible_targets_remains_unlinked() -> None:
+    """An attribution between two valid targets should not be guessed."""
+    page = _page(
+        49,
+        _block("page-0049", 1, BlockRoleHint.VERSE, "Một câu hát."),
+        _block(
+            "page-0049",
+            2,
+            BlockRoleHint.ATTRIBUTION,
+            "Tên tác giả",
+        ),
+        _block("page-0049", 3, BlockRoleHint.QUOTE, "“Một câu trích dẫn.”"),
+    )
+
+    result = BookStructuralAnalyzer().analyze((page,))
+
+    assert all(
+        relation.kind is not RelationshipKind.ATTRIBUTION_OF
+        for relation in result.document.relationships
+    )
+
+
+def test_bilingual_adjacent_quotes_form_translation_candidate() -> None:
+    """Different-language adjacent quotes should remain separate and relate."""
+    page = _page(
+        271,
+        _block(
+            "page-0271",
+            1,
+            BlockRoleHint.QUOTE,
+            "“Education is an act of love and wisdom.”",
+            language="en",
+        ),
+        _block(
+            "page-0271",
+            2,
+            BlockRoleHint.QUOTE,
+            "“Giáo dục là một hành động của tình yêu và trí tuệ.”",
+            language="vi",
+        ),
+    )
+
+    result = BookStructuralAnalyzer().analyze((page,))
+
+    assert len(result.document.nodes) == 2
+    original, translated = result.document.nodes
+    assert isinstance(original, QuotationNode)
+    assert isinstance(translated, QuotationNode)
+    relations = [
+        relation
+        for relation in result.document.relationships
+        if relation.kind is RelationshipKind.TRANSLATION_OF
+    ]
+    assert len(relations) == 1
+    relation = relations[0]
+    assert relation.source_id == translated.node_id
+    assert relation.target_id == original.node_id
+    assert relation.confidence == 0.80
+
+
+def test_adjacent_attribution_strengthens_translation_candidate() -> None:
+    """Shared attribution context should strengthen a bilingual quote pair."""
+    page = _page(
+        271,
+        _block(
+            "page-0271",
+            1,
+            BlockRoleHint.ATTRIBUTION,
+            "Lã Hồ Minh Khuê (từ Đại học Harvard)",
+        ),
+        _block(
+            "page-0271",
+            2,
+            BlockRoleHint.QUOTE,
+            "“Education is an act of love and wisdom.”",
+            language="en",
+        ),
+        _block(
+            "page-0271",
+            3,
+            BlockRoleHint.QUOTE,
+            "“Giáo dục là một hành động của tình yêu và trí tuệ.”",
+            language="vi",
+        ),
+    )
+
+    result = BookStructuralAnalyzer().analyze((page,))
+
+    relation = next(
+        relation
+        for relation in result.document.relationships
+        if relation.kind is RelationshipKind.TRANSLATION_OF
+    )
+    assert relation.confidence == 0.90
+    assert "attribution context" in relation.reasons[-1]
+
+
+def test_same_language_quote_blocks_still_share_one_quotation() -> None:
+    """Language-aware splitting must not break same-language quote grouping."""
+    page = _page(
+        87,
+        _block(
+            "page-0087",
+            1,
+            BlockRoleHint.QUOTE,
+            "“Đoạn thứ nhất.",
+            language="vi",
+        ),
+        _block(
+            "page-0087",
+            2,
+            BlockRoleHint.QUOTE,
+            "Đoạn thứ hai.”",
+            language="vi",
+        ),
+    )
+
+    result = BookStructuralAnalyzer().analyze((page,))
+
+    assert len(result.document.nodes) == 1
+    assert isinstance(result.document.nodes[0], QuotationNode)
+    assert all(
+        relation.kind is not RelationshipKind.TRANSLATION_OF
+        for relation in result.document.relationships
+    )
