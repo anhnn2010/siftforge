@@ -1,0 +1,393 @@
+{
+  "blocks": [
+    {
+      "alignment": "justify",
+      "block_id": "pdf:aa1ef056169f:page:0412:block:0001",
+      "content": [
+        {
+          "language": "vi",
+          "semantic_line_break_after": false,
+          "source_typography": {
+            "caps_style": "normal",
+            "decorations": [],
+            "posture": "roman",
+            "vertical_position": "baseline",
+            "weight": "normal"
+          },
+          "span_id": "pdf:aa1ef056169f:page:0412:block:0001:span:0001",
+          "text": "Bước đầu, tôi để chế độ công khai tài khoản và địa chỉ gmail của bản thân với con gái, đặt chế độ mặc định trên laptop. Mục đích, giúp Minh Khuê nhận thấy sâu sắc hơn thái độ sống chân thành, cởi mở, không che đậy của tôi trước con gái."
+        }
+      ],
+      "dominant_language": "vi",
+      "heading_level_hint": null,
+      "heading_role_hint": "unknown",
+      "marker": null,
+      "region": null,
+      "role_hint": "paragraph",
+      "sequence_index": 0
+    },
+    {
+      "alignment": "left",
+      "block_id": "pdf:aa1ef056169f:page:0412:block:0002",
+      "content": [
+        {
+          "language": "vi",
+          "semantic_line_break_after": false,
+          "source_typography": {
+            "caps_style": "normal",
+            "decorations": [],
+            "posture": "roman",
+            "vertical_position": "baseline",
+            "weight": "normal"
+          },
+          "span_id": "pdf:aa1ef056169f:page:0412:block:0002:span:0001",
+          "text": "TÌNH HUỐNG"
+        }
+      ],
+      "dominant_language": "vi",
+      "heading_level_hint": 2,
+      "heading_role_hint": "scenario_label",
+      "marker": {
+        "kind": "graphic",
+        "ordinal": null,
+        "raw_text": null
+      },
+      "region": null,
+      "role_hint": "heading",
+      "sequence_index": 1
+    },
+    {
+      "alignment": "left",
+      "block_id": "pdf:aa1ef056169f:page:0412:block:0003",
+      "content": [
+        {
+          "language": "vi",
+          "semantic_line_break_after": false,
+          "source_typography": {
+            "caps_style": "normal",
+            "decorations": [],
+            "posture": "roman",
+            "vertical_position": "baseline",
+            "weight": "normal"
+          },
+          "span_id": "pdf:aa1ef056169f:page:0412:block:0003:span:0001",
+          "text": "Tôi nhờ Minh Khuê đổi mật khẩu gmail thường xuyên với lý do:"
+        }
+      ],
+      "dominant_language": "vi",
+      "heading_level_hint": null,
+      "heading_role_hint": "unknown",
+      "marker": null,
+      "region": null,
+      "role_hint": "paragraph",
+      "sequence_index": 2
+    },
+    {
+      "alignment": "justify",
+      "block_id": "pdf:aa1ef056169f:page:0412:block:0004",
+      "content": [
+        {
+          "language": "vi",
+          "semantic_line_break_after": false,
+          "source_typography": {
+            "caps_style": "normal",
+            "decorations": [],
+            "posture": "roman",
+            "vertical_position": "baseline",
+            "weight": "normal"
+          },
+          "span_id": "pdf:aa1ef056169f:page:0412:block:0004:span:0001",
+          "text": "Mẹ quên mật khẩu rồi, con nhớ giúp mẹ với, mẹ nhiều việc nên hay quên quá con ạ”."
+        }
+      ],
+      "dominant_language": "vi",
+      "heading_level_hint": null,
+      "heading_role_hint": "unknown",
+      "marker": {
+        "kind": "graphic",
+        "ordinal": null,
+        "raw_text": null
+      },
+      "region": null,
+      "role_hint": "paragraph",
+      "sequence_index": 3
+    },
+    {
+      "alignment": "justify",
+      "block_id": "pdf:aa1ef056169f:page:0412:block:0005",
+      "content": [
+        {
+          "language": "vi",
+          "semantic_line_break_after": false,
+          "source_typography": {
+            "caps_style": "normal",
+            "decorations": [],
+            "posture": "roman",
+            "vertical_position": "baseline",
+            "weight": "normal"
+          },
+          "span_id": "pdf:aa1ef056169f:page:0412:block:0005:span:0001",
+          "text": "Mẹ thật thiếu trách nhiệm, con cài mật khẩu cho mẹ xong là con quên liền, mẹ phải tự nhớ lấy chứ, đó là nguyên tắc bảo mật cá nhân mà."
+        }
+      ],
+      "dominant_language": "vi",
+      "heading_level_hint": null,
+      "heading_role_hint": "unknown",
+      "marker": {
+        "kind": "graphic",
+        "ordinal": null,
+        "raw_text": null
+      },
+      "region": null,
+      "role_hint": "paragraph",
+      "sequence_index": 4
+    },
+    {
+      "alignment": "justify",
+      "block_id": "pdf:aa1ef056169f:page:0412:block:0006",
+      "content": [
+        {
+          "language": "vi",
+          "semantic_line_break_after": false,
+          "source_typography": {
+            "caps_style": "normal",
+            "decorations": [],
+            "posture": "roman",
+            "vertical_position": "baseline",
+            "weight": "normal"
+          },
+          "span_id": "pdf:aa1ef056169f:page:0412:block:0006:span:0001",
+          "text": "Ôi dào, hòm thư của mẹ toàn thư công việc, bài vở, chứ có gì đâu mà phải bảo mật riêng tư, nhất là với con!"
+        }
+      ],
+      "dominant_language": "vi",
+      "heading_level_hint": null,
+      "heading_role_hint": "unknown",
+      "marker": {
+        "kind": "graphic",
+        "ordinal": null,
+        "raw_text": null
+      },
+      "region": null,
+      "role_hint": "paragraph",
+      "sequence_index": 5
+    },
+    {
+      "alignment": "justify",
+      "block_id": "pdf:aa1ef056169f:page:0412:block:0007",
+      "content": [
+        {
+          "language": "vi",
+          "semantic_line_break_after": false,
+          "source_typography": {
+            "caps_style": "normal",
+            "decorations": [],
+            "posture": "roman",
+            "vertical_position": "baseline",
+            "weight": "normal"
+          },
+          "span_id": "pdf:aa1ef056169f:page:0412:block:0007:span:0001",
+          "text": "Nhưng con không thích quan tâm đến riêng tư của mẹ, và ngược lại con cũng không thích mẹ quan tâm đến riêng tư của con. Ai cũng có quyền bảo mật riêng tư!"
+        }
+      ],
+      "dominant_language": "vi",
+      "heading_level_hint": null,
+      "heading_role_hint": "unknown",
+      "marker": {
+        "kind": "graphic",
+        "ordinal": null,
+        "raw_text": null
+      },
+      "region": null,
+      "role_hint": "paragraph",
+      "sequence_index": 6
+    },
+    {
+      "alignment": "justify",
+      "block_id": "pdf:aa1ef056169f:page:0412:block:0008",
+      "content": [
+        {
+          "language": "vi",
+          "semantic_line_break_after": false,
+          "source_typography": {
+            "caps_style": "normal",
+            "decorations": [],
+            "posture": "roman",
+            "vertical_position": "baseline",
+            "weight": "normal"
+          },
+          "span_id": "pdf:aa1ef056169f:page:0412:block:0008:span:0001",
+          "text": "Tất nhiên là mẹ tôn trọng riêng tư của con, đến cả cặp sách của con, chưa bao giờ mẹ lục lọi cơ mà, huống gì gmail của con!"
+        }
+      ],
+      "dominant_language": "vi",
+      "heading_level_hint": null,
+      "heading_role_hint": "unknown",
+      "marker": {
+        "kind": "graphic",
+        "ordinal": null,
+        "raw_text": null
+      },
+      "region": null,
+      "role_hint": "paragraph",
+      "sequence_index": 7
+    },
+    {
+      "alignment": "justify",
+      "block_id": "pdf:aa1ef056169f:page:0412:block:0009",
+      "content": [
+        {
+          "language": "vi",
+          "semantic_line_break_after": false,
+          "source_typography": {
+            "caps_style": "normal",
+            "decorations": [],
+            "posture": "roman",
+            "vertical_position": "baseline",
+            "weight": "normal"
+          },
+          "span_id": "pdf:aa1ef056169f:page:0412:block:0009:span:0001",
+          "text": "Ôi, con thấy nhiều cha mẹ nói thế nhưng vẫn cứ rình đọc trộm tin nhắn, thư từ của con cái, mẹ ạ!"
+        }
+      ],
+      "dominant_language": "vi",
+      "heading_level_hint": null,
+      "heading_role_hint": "unknown",
+      "marker": {
+        "kind": "graphic",
+        "ordinal": null,
+        "raw_text": null
+      },
+      "region": null,
+      "role_hint": "paragraph",
+      "sequence_index": 8
+    },
+    {
+      "alignment": "left",
+      "block_id": "pdf:aa1ef056169f:page:0412:block:0010",
+      "content": [
+        {
+          "language": "vi",
+          "semantic_line_break_after": false,
+          "source_typography": {
+            "caps_style": "normal",
+            "decorations": [],
+            "posture": "roman",
+            "vertical_position": "baseline",
+            "weight": "normal"
+          },
+          "span_id": "pdf:aa1ef056169f:page:0412:block:0010:span:0001",
+          "text": "Mẹ hứa không bao giờ như thế!"
+        }
+      ],
+      "dominant_language": "vi",
+      "heading_level_hint": null,
+      "heading_role_hint": "unknown",
+      "marker": {
+        "kind": "graphic",
+        "ordinal": null,
+        "raw_text": null
+      },
+      "region": null,
+      "role_hint": "paragraph",
+      "sequence_index": 9
+    },
+    {
+      "alignment": "justify",
+      "block_id": "pdf:aa1ef056169f:page:0412:block:0011",
+      "content": [
+        {
+          "language": "vi",
+          "semantic_line_break_after": false,
+          "source_typography": {
+            "caps_style": "normal",
+            "decorations": [],
+            "posture": "roman",
+            "vertical_position": "baseline",
+            "weight": "normal"
+          },
+          "span_id": "pdf:aa1ef056169f:page:0412:block:0011:span:0001",
+          "text": "Những đứa bạn của con hay bị bố mẹ đọc trộm thư và tin nhắn, cũng bảo với con rằng, bố mẹ bạn ấy luôn cam kết không đọc trộm thư từ của con cái. Từ đó, con rút ra kết luận rằng những cam kết bằng miệng không bao giờ có độ tin cậy!"
+        }
+      ],
+      "dominant_language": "vi",
+      "heading_level_hint": null,
+      "heading_role_hint": "unknown",
+      "marker": {
+        "kind": "graphic",
+        "ordinal": null,
+        "raw_text": null
+      },
+      "region": null,
+      "role_hint": "paragraph",
+      "sequence_index": 10
+    },
+    {
+      "alignment": "left",
+      "block_id": "pdf:aa1ef056169f:page:0412:block:0012",
+      "content": [
+        {
+          "language": null,
+          "semantic_line_break_after": false,
+          "source_typography": {
+            "caps_style": "normal",
+            "decorations": [],
+            "posture": "roman",
+            "vertical_position": "baseline",
+            "weight": "normal"
+          },
+          "span_id": "pdf:aa1ef056169f:page:0412:block:0012:span:0001",
+          "text": "412"
+        }
+      ],
+      "dominant_language": null,
+      "heading_level_hint": null,
+      "heading_role_hint": "unknown",
+      "marker": null,
+      "region": null,
+      "role_hint": "page_number",
+      "sequence_index": 11
+    },
+    {
+      "alignment": "left",
+      "block_id": "pdf:aa1ef056169f:page:0412:block:0013",
+      "content": [
+        {
+          "language": "vi",
+          "semantic_line_break_after": false,
+          "source_typography": {
+            "caps_style": "normal",
+            "decorations": [],
+            "posture": "roman",
+            "vertical_position": "baseline",
+            "weight": "normal"
+          },
+          "span_id": "pdf:aa1ef056169f:page:0412:block:0013:span:0001",
+          "text": "18 NĂM KIM CƯƠNG"
+        }
+      ],
+      "dominant_language": "vi",
+      "heading_level_hint": null,
+      "heading_role_hint": "unknown",
+      "marker": null,
+      "region": null,
+      "role_hint": "page_footer",
+      "sequence_index": 12
+    }
+  ],
+  "dominant_language": "vi",
+  "page_id": "pdf:aa1ef056169f:page:0412",
+  "page_kind_hint": "text",
+  "printed_page_number": "412",
+  "source": {
+    "media_type": "application/x.siftforge.pdf-page",
+    "metadata": {
+      "fixture_origin": "real-extraction-run",
+      "page_number": 412
+    },
+    "sha256": "fe6c17e109b16e4ef3914fdb8f5a5c6f59ea803912745b766ea8aa964c6c70f1",
+    "source_id": "pdf:aa1ef056169f:page:0412",
+    "uri": "fixture://18-nam-kim-cuong/page/0412"
+  },
+  "warnings": []
+}

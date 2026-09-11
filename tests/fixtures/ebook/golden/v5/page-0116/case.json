@@ -1,0 +1,12 @@
+{
+  "case_id": "page-0116",
+  "model": "gemini-3.6-flash",
+  "prompt_version": "5",
+  "schema_version": "5",
+  "source_page_number": 116,
+  "tags": [
+    "figure",
+    "image-region",
+    "caption"
+  ]
+}

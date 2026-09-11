@@ -1,0 +1,240 @@
+{
+  "blocks": [
+    {
+      "alignment": "justify",
+      "block_id": "pdf:aa1ef056169f:page:0068:block:0001",
+      "content": [
+        {
+          "language": "vi",
+          "semantic_line_break_after": false,
+          "source_typography": {
+            "caps_style": "normal",
+            "decorations": [],
+            "posture": "roman",
+            "vertical_position": "baseline",
+            "weight": "normal"
+          },
+          "span_id": "pdf:aa1ef056169f:page:0068:block:0001:span:0001",
+          "text": "bằng những lời đổ lỗi, oán thán, than thân trách phận, hằn học ngoại cảnh, khiến đứa trẻ phải hứng chịu, phải đau khổ âm thầm. Và đến một ngày, nó sẽ tự oán trách nó, nó tự buộc trách nhiệm về mọi nỗi cay đắng vất vả mà cha mẹ gặp phải. Nó sẽ triệt tiêu dần tình yêu với bản thân nó. Mà bạn đâu muốn đứa con mình trở nên như thế!"
+        }
+      ],
+      "dominant_language": "vi",
+      "heading_level_hint": null,
+      "heading_role_hint": "unknown",
+      "marker": null,
+      "region": null,
+      "role_hint": "paragraph",
+      "sequence_index": 0
+    },
+    {
+      "alignment": "left",
+      "block_id": "pdf:aa1ef056169f:page:0068:block:0002",
+      "content": [
+        {
+          "language": "vi",
+          "semantic_line_break_after": false,
+          "source_typography": {
+            "caps_style": "normal",
+            "decorations": [],
+            "posture": "roman",
+            "vertical_position": "baseline",
+            "weight": "bold"
+          },
+          "span_id": "pdf:aa1ef056169f:page:0068:block:0002:span:0001",
+          "text": "Làm mẹ chủ động và dấn thân, không đổ lỗi cho xã hội, dù ngoài kia thế nào!"
+        }
+      ],
+      "dominant_language": "vi",
+      "heading_level_hint": 3,
+      "heading_role_hint": "section_title",
+      "marker": null,
+      "region": null,
+      "role_hint": "heading",
+      "sequence_index": 1
+    },
+    {
+      "alignment": "justify",
+      "block_id": "pdf:aa1ef056169f:page:0068:block:0003",
+      "content": [
+        {
+          "language": "vi",
+          "semantic_line_break_after": false,
+          "source_typography": {
+            "caps_style": "normal",
+            "decorations": [],
+            "posture": "roman",
+            "vertical_position": "baseline",
+            "weight": "normal"
+          },
+          "span_id": "pdf:aa1ef056169f:page:0068:block:0003:span:0001",
+          "text": "Trong cuộc đời làm mẹ tràn đầy hạnh ngộ, tôi đã trải qua nhiều cuộc sát hạch thẳng thắn của con gái. Sau mỗi lần sát hạch, tôi có cơ hội nhìn lại chính mình. Nhận ra những hạn chế, thiếu khuyết trong phẩm chất của bản thân, để khắc phục. Vâng, chỉ có một tình yêu không điều kiện, tha thiết mới trở thành nguồn động lực mạnh mẽ giúp tôi trưởng thành và sửa chữa bản thân:"
+        }
+      ],
+      "dominant_language": "vi",
+      "heading_level_hint": null,
+      "heading_role_hint": "unknown",
+      "marker": null,
+      "region": null,
+      "role_hint": "paragraph",
+      "sequence_index": 2
+    },
+    {
+      "alignment": "center",
+      "block_id": "pdf:aa1ef056169f:page:0068:block:0004",
+      "content": [
+        {
+          "language": "vi",
+          "semantic_line_break_after": true,
+          "source_typography": {
+            "caps_style": "normal",
+            "decorations": [],
+            "posture": "italic",
+            "vertical_position": "baseline",
+            "weight": "normal"
+          },
+          "span_id": "pdf:aa1ef056169f:page:0068:block:0004:span:0001",
+          "text": "Mẹ cần con để trưởng thành,"
+        },
+        {
+          "language": "vi",
+          "semantic_line_break_after": true,
+          "source_typography": {
+            "caps_style": "normal",
+            "decorations": [],
+            "posture": "italic",
+            "vertical_position": "baseline",
+            "weight": "normal"
+          },
+          "span_id": "pdf:aa1ef056169f:page:0068:block:0004:span:0002",
+          "text": "Con là sức mạnh trong vành nôi ngoan."
+        },
+        {
+          "language": "vi",
+          "semantic_line_break_after": true,
+          "source_typography": {
+            "caps_style": "normal",
+            "decorations": [],
+            "posture": "italic",
+            "vertical_position": "baseline",
+            "weight": "normal"
+          },
+          "span_id": "pdf:aa1ef056169f:page:0068:block:0004:span:0003",
+          "text": "Yêu con để mẹ vững vàng,"
+        },
+        {
+          "language": "vi",
+          "semantic_line_break_after": false,
+          "source_typography": {
+            "caps_style": "normal",
+            "decorations": [],
+            "posture": "italic",
+            "vertical_position": "baseline",
+            "weight": "normal"
+          },
+          "span_id": "pdf:aa1ef056169f:page:0068:block:0004:span:0004",
+          "text": "Dìu con tập bước mẹ càng lớn khôn."
+        }
+      ],
+      "dominant_language": "vi",
+      "heading_level_hint": null,
+      "heading_role_hint": "unknown",
+      "marker": null,
+      "region": null,
+      "role_hint": "verse",
+      "sequence_index": 3
+    },
+    {
+      "alignment": "justify",
+      "block_id": "pdf:aa1ef056169f:page:0068:block:0005",
+      "content": [
+        {
+          "language": "vi",
+          "semantic_line_break_after": false,
+          "source_typography": {
+            "caps_style": "normal",
+            "decorations": [],
+            "posture": "roman",
+            "vertical_position": "baseline",
+            "weight": "normal"
+          },
+          "span_id": "pdf:aa1ef056169f:page:0068:block:0005:span:0001",
+          "text": "Sửa chữa thói quen ngụy biện và đổ lỗi, đó không phải là một việc dễ dàng. Đầu tiên, đó là khả năng tự thú nhận, tự thừa nhận mình mang thói quen đó. Rồi, tôi lần lượt nhìn lại, nhận ra mình đã phải hứng chịu, đã đánh mất bao cơ hội công việc, đánh mất bao mối bạn bè chân tình chỉ vì thói ngụy biện mà phôi phai mãi mãi. Rồi tôi thay đổi dần dần, từng chút, từng chút một."
+        }
+      ],
+      "dominant_language": "vi",
+      "heading_level_hint": null,
+      "heading_role_hint": "unknown",
+      "marker": null,
+      "region": null,
+      "role_hint": "paragraph",
+      "sequence_index": 4
+    },
+    {
+      "alignment": "left",
+      "block_id": "pdf:aa1ef056169f:page:0068:block:0006",
+      "content": [
+        {
+          "language": null,
+          "semantic_line_break_after": false,
+          "source_typography": {
+            "caps_style": "normal",
+            "decorations": [],
+            "posture": "roman",
+            "vertical_position": "baseline",
+            "weight": "normal"
+          },
+          "span_id": "pdf:aa1ef056169f:page:0068:block:0006:span:0001",
+          "text": "68"
+        }
+      ],
+      "dominant_language": null,
+      "heading_level_hint": null,
+      "heading_role_hint": "unknown",
+      "marker": null,
+      "region": null,
+      "role_hint": "page_number",
+      "sequence_index": 5
+    },
+    {
+      "alignment": "left",
+      "block_id": "pdf:aa1ef056169f:page:0068:block:0007",
+      "content": [
+        {
+          "language": "vi",
+          "semantic_line_break_after": false,
+          "source_typography": {
+            "caps_style": "normal",
+            "decorations": [],
+            "posture": "roman",
+            "vertical_position": "baseline",
+            "weight": "normal"
+          },
+          "span_id": "pdf:aa1ef056169f:page:0068:block:0007:span:0001",
+          "text": "18 NĂM KIM CƯƠNG"
+        }
+      ],
+      "dominant_language": "vi",
+      "heading_level_hint": null,
+      "heading_role_hint": "unknown",
+      "marker": null,
+      "region": null,
+      "role_hint": "page_footer",
+      "sequence_index": 6
+    }
+  ],
+  "dominant_language": "vi",
+  "page_id": "pdf:aa1ef056169f:page:0068",
+  "page_kind_hint": "text",
+  "printed_page_number": "68",
+  "source": {
+    "media_type": "application/x.siftforge.pdf-page",
+    "metadata": {
+      "fixture_origin": "real-extraction-run",
+      "page_number": 68
+    },
+    "sha256": "87d16ac503bcd974c6b4b59b5dadc9b9c1c727f27da1564e32fe0e917f09cad3",
+    "source_id": "pdf:aa1ef056169f:page:0068",
+    "uri": "fixture://18-nam-kim-cuong/page/0068"
+  },
+  "warnings": []
+}

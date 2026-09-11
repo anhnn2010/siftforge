@@ -1,0 +1,337 @@
+{
+  "blocks": [
+    {
+      "alignment": "justify",
+      "block_id": "pdf:aa1ef056169f:page:0378:block:0001",
+      "content": [
+        {
+          "language": "vi",
+          "semantic_line_break_after": false,
+          "source_typography": {
+            "caps_style": "normal",
+            "decorations": [],
+            "posture": "roman",
+            "vertical_position": "baseline",
+            "weight": "normal"
+          },
+          "span_id": "pdf:aa1ef056169f:page:0378:block:0001:span:0001",
+          "text": "mà họ không nói xấu? Từ tâm và sẵn lòng ban tặng, không ghi nhớ điều đã làm cho người khác nên thoải mái thanh thản."
+        }
+      ],
+      "dominant_language": "vi",
+      "heading_level_hint": null,
+      "heading_role_hint": "unknown",
+      "marker": null,
+      "region": null,
+      "role_hint": "paragraph",
+      "sequence_index": 0
+    },
+    {
+      "alignment": "justify",
+      "block_id": "pdf:aa1ef056169f:page:0378:block:0002",
+      "content": [
+        {
+          "language": "vi",
+          "semantic_line_break_after": false,
+          "source_typography": {
+            "caps_style": "normal",
+            "decorations": [],
+            "posture": "roman",
+            "vertical_position": "baseline",
+            "weight": "normal"
+          },
+          "span_id": "pdf:aa1ef056169f:page:0378:block:0002:span:0001",
+          "text": "Biết nói “Không” lúc cần – vì thú nhận không biết, không giỏi là cách làm nhẹ hành trang; từ chối những cuộc hẹn vô bổ, nên có nhiều thời gian chăm sóc bản thân và di dưỡng tâm hồn."
+        }
+      ],
+      "dominant_language": "vi",
+      "heading_level_hint": null,
+      "heading_role_hint": "unknown",
+      "marker": {
+        "kind": "numeric",
+        "ordinal": 10,
+        "raw_text": "10."
+      },
+      "region": null,
+      "role_hint": "list_item",
+      "sequence_index": 1
+    },
+    {
+      "alignment": "justify",
+      "block_id": "pdf:aa1ef056169f:page:0378:block:0003",
+      "content": [
+        {
+          "language": "vi",
+          "semantic_line_break_after": false,
+          "source_typography": {
+            "caps_style": "normal",
+            "decorations": [],
+            "posture": "roman",
+            "vertical_position": "baseline",
+            "weight": "normal"
+          },
+          "span_id": "pdf:aa1ef056169f:page:0378:block:0003:span:0001",
+          "text": "Đòi hỏi bản thân cao hơn đòi hỏi xã hội, nên chúng tôi không có thói quen đổ lỗi và không đóng vai “nạn nhân” đau khổ. Chúng tôi luôn chủ động hành động với phương châm “Đừng chờ đợi, vì con tàu thời gian không dừng lại bến ga nào!”. Do đó, chúng tôi thường chủ động mỉm cười và dễ dàng thể tất với xung quanh nên luôn luôn vui vẻ."
+        }
+      ],
+      "dominant_language": "vi",
+      "heading_level_hint": null,
+      "heading_role_hint": "unknown",
+      "marker": {
+        "kind": "numeric",
+        "ordinal": 11,
+        "raw_text": "11."
+      },
+      "region": null,
+      "role_hint": "list_item",
+      "sequence_index": 2
+    },
+    {
+      "alignment": "justify",
+      "block_id": "pdf:aa1ef056169f:page:0378:block:0004",
+      "content": [
+        {
+          "language": "vi",
+          "semantic_line_break_after": false,
+          "source_typography": {
+            "caps_style": "normal",
+            "decorations": [],
+            "posture": "roman",
+            "vertical_position": "baseline",
+            "weight": "normal"
+          },
+          "span_id": "pdf:aa1ef056169f:page:0378:block:0004:span:0001",
+          "text": "Đọc nhiều sách, ít xem ti vi và hạn chế lướt web, như thế, thế giới nội tâm được khai mở và giảm thiểu những thông tin nhảm nhí, xung đột, thao túng tâm hồn, nên khi nào cũng muốn cười và ca hát."
+        }
+      ],
+      "dominant_language": "vi",
+      "heading_level_hint": null,
+      "heading_role_hint": "unknown",
+      "marker": {
+        "kind": "numeric",
+        "ordinal": 12,
+        "raw_text": "12."
+      },
+      "region": null,
+      "role_hint": "list_item",
+      "sequence_index": 3
+    },
+    {
+      "alignment": "justify",
+      "block_id": "pdf:aa1ef056169f:page:0378:block:0005",
+      "content": [
+        {
+          "language": "vi",
+          "semantic_line_break_after": false,
+          "source_typography": {
+            "caps_style": "normal",
+            "decorations": [],
+            "posture": "roman",
+            "vertical_position": "baseline",
+            "weight": "normal"
+          },
+          "span_id": "pdf:aa1ef056169f:page:0378:block:0005:span:0001",
+          "text": "Làm phước thật lòng, khởi phát thiện phước ngay nơi ở, ngay nơi hữu duyên và tùy duyên, không suy tính và ghi nhớ."
+        }
+      ],
+      "dominant_language": "vi",
+      "heading_level_hint": null,
+      "heading_role_hint": "unknown",
+      "marker": {
+        "kind": "numeric",
+        "ordinal": 13,
+        "raw_text": "13."
+      },
+      "region": null,
+      "role_hint": "list_item",
+      "sequence_index": 4
+    },
+    {
+      "alignment": "justify",
+      "block_id": "pdf:aa1ef056169f:page:0378:block:0006",
+      "content": [
+        {
+          "language": "vi",
+          "semantic_line_break_after": false,
+          "source_typography": {
+            "caps_style": "normal",
+            "decorations": [],
+            "posture": "roman",
+            "vertical_position": "baseline",
+            "weight": "normal"
+          },
+          "span_id": "pdf:aa1ef056169f:page:0378:block:0006:span:0001",
+          "text": "Quản lý tiền bạc hợp lý, thông minh, để tiền bạc thực sự phục vụ cuộc sống bình an, không mắc nghiện mua sắm và xài đồ theo mốt, không nghiện đồ đắt tiền, nên ít phải tiêu tiền lãng phí."
+        }
+      ],
+      "dominant_language": "vi",
+      "heading_level_hint": null,
+      "heading_role_hint": "unknown",
+      "marker": {
+        "kind": "numeric",
+        "ordinal": 14,
+        "raw_text": "14."
+      },
+      "region": null,
+      "role_hint": "list_item",
+      "sequence_index": 5
+    },
+    {
+      "alignment": "justify",
+      "block_id": "pdf:aa1ef056169f:page:0378:block:0007",
+      "content": [
+        {
+          "language": "vi",
+          "semantic_line_break_after": false,
+          "source_typography": {
+            "caps_style": "normal",
+            "decorations": [],
+            "posture": "roman",
+            "vertical_position": "baseline",
+            "weight": "normal"
+          },
+          "span_id": "pdf:aa1ef056169f:page:0378:block:0007:span:0001",
+          "text": "Tiền bạc đã tiêu rồi, không so đo, tính toán thiệt hơn nên tâm trạng không bị căng thẳng vì nuối tiếc."
+        }
+      ],
+      "dominant_language": "vi",
+      "heading_level_hint": null,
+      "heading_role_hint": "unknown",
+      "marker": {
+        "kind": "numeric",
+        "ordinal": 15,
+        "raw_text": "15."
+      },
+      "region": null,
+      "role_hint": "list_item",
+      "sequence_index": 6
+    },
+    {
+      "alignment": "justify",
+      "block_id": "pdf:aa1ef056169f:page:0378:block:0008",
+      "content": [
+        {
+          "language": "vi",
+          "semantic_line_break_after": false,
+          "source_typography": {
+            "caps_style": "normal",
+            "decorations": [],
+            "posture": "roman",
+            "vertical_position": "baseline",
+            "weight": "normal"
+          },
+          "span_id": "pdf:aa1ef056169f:page:0378:block:0008:span:0001",
+          "text": "Sức khỏe là quan trọng nhất để giúp sống nhiệt tình vui vẻ nên chúng tôi có kế hoạch để chủ động kiểm tra sức khỏe định kỳ, do đó công việc được trôi chảy, không bị lãng phí thời gian và tiền bạc làm lại."
+        }
+      ],
+      "dominant_language": "vi",
+      "heading_level_hint": null,
+      "heading_role_hint": "unknown",
+      "marker": {
+        "kind": "numeric",
+        "ordinal": 16,
+        "raw_text": "16."
+      },
+      "region": null,
+      "role_hint": "list_item",
+      "sequence_index": 7
+    },
+    {
+      "alignment": "justify",
+      "block_id": "pdf:aa1ef056169f:page:0378:block:0009",
+      "content": [
+        {
+          "language": "vi",
+          "semantic_line_break_after": false,
+          "source_typography": {
+            "caps_style": "normal",
+            "decorations": [],
+            "posture": "roman",
+            "vertical_position": "baseline",
+            "weight": "normal"
+          },
+          "span_id": "pdf:aa1ef056169f:page:0378:block:0009:span:0001",
+          "text": "Yêu thương sẽ tạo tâm thế cởi mở, chan hòa, giúp cơ thể vượt qua áp lực công việc học hành tốt nhất, nên chúng tôi luôn luôn thực hành yêu thương thật lòng và thân ái."
+        }
+      ],
+      "dominant_language": "vi",
+      "heading_level_hint": null,
+      "heading_role_hint": "unknown",
+      "marker": {
+        "kind": "numeric",
+        "ordinal": 17,
+        "raw_text": "17."
+      },
+      "region": null,
+      "role_hint": "list_item",
+      "sequence_index": 8
+    },
+    {
+      "alignment": "left",
+      "block_id": "pdf:aa1ef056169f:page:0378:block:0010",
+      "content": [
+        {
+          "language": null,
+          "semantic_line_break_after": false,
+          "source_typography": {
+            "caps_style": "normal",
+            "decorations": [],
+            "posture": "roman",
+            "vertical_position": "baseline",
+            "weight": "normal"
+          },
+          "span_id": "pdf:aa1ef056169f:page:0378:block:0010:span:0001",
+          "text": "378"
+        }
+      ],
+      "dominant_language": null,
+      "heading_level_hint": null,
+      "heading_role_hint": "unknown",
+      "marker": null,
+      "region": null,
+      "role_hint": "page_number",
+      "sequence_index": 9
+    },
+    {
+      "alignment": "left",
+      "block_id": "pdf:aa1ef056169f:page:0378:block:0011",
+      "content": [
+        {
+          "language": "vi",
+          "semantic_line_break_after": false,
+          "source_typography": {
+            "caps_style": "normal",
+            "decorations": [],
+            "posture": "roman",
+            "vertical_position": "baseline",
+            "weight": "normal"
+          },
+          "span_id": "pdf:aa1ef056169f:page:0378:block:0011:span:0001",
+          "text": "18 NĂM KIM CƯƠNG"
+        }
+      ],
+      "dominant_language": "vi",
+      "heading_level_hint": null,
+      "heading_role_hint": "unknown",
+      "marker": null,
+      "region": null,
+      "role_hint": "page_footer",
+      "sequence_index": 10
+    }
+  ],
+  "dominant_language": "vi",
+  "page_id": "pdf:aa1ef056169f:page:0378",
+  "page_kind_hint": "text",
+  "printed_page_number": "378",
+  "source": {
+    "media_type": "application/x.siftforge.pdf-page",
+    "metadata": {
+      "fixture_origin": "real-extraction-run",
+      "page_number": 378
+    },
+    "sha256": "971a73ac85173f03c40648a37a0fafe5e1eff0eb8e65c5264ecdcaee79a91aa9",
+    "source_id": "pdf:aa1ef056169f:page:0378",
+    "uri": "fixture://18-nam-kim-cuong/page/0378"
+  },
+  "warnings": []
+}

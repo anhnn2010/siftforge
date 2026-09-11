@@ -1,0 +1,435 @@
+{
+  "blocks": [
+    {
+      "alignment": "left",
+      "block_id": "pdf:aa1ef056169f:page:0398:block:0001",
+      "content": [
+        {
+          "language": "vi",
+          "semantic_line_break_after": false,
+          "source_typography": {
+            "caps_style": "normal",
+            "decorations": [],
+            "posture": "roman",
+            "vertical_position": "baseline",
+            "weight": "normal"
+          },
+          "span_id": "pdf:aa1ef056169f:page:0398:block:0001:span:0001",
+          "text": "Tuần vừa rồi con chị về tố cáo:"
+        }
+      ],
+      "dominant_language": "vi",
+      "heading_level_hint": null,
+      "heading_role_hint": "unknown",
+      "marker": null,
+      "region": null,
+      "role_hint": "paragraph",
+      "sequence_index": 0
+    },
+    {
+      "alignment": "left",
+      "block_id": "pdf:aa1ef056169f:page:0398:block:0002",
+      "content": [
+        {
+          "language": "vi",
+          "semantic_line_break_after": false,
+          "source_typography": {
+            "caps_style": "normal",
+            "decorations": [],
+            "posture": "roman",
+            "vertical_position": "baseline",
+            "weight": "normal"
+          },
+          "span_id": "pdf:aa1ef056169f:page:0398:block:0002:span:0001",
+          "text": "– Mẹ ơi, hôm nay Bống phải ở lại lớp muộn vì làm chậm bài."
+        }
+      ],
+      "dominant_language": "vi",
+      "heading_level_hint": null,
+      "heading_role_hint": "unknown",
+      "marker": null,
+      "region": null,
+      "role_hint": "paragraph",
+      "sequence_index": 1
+    },
+    {
+      "alignment": "justify",
+      "block_id": "pdf:aa1ef056169f:page:0398:block:0003",
+      "content": [
+        {
+          "language": "vi",
+          "semantic_line_break_after": false,
+          "source_typography": {
+            "caps_style": "normal",
+            "decorations": [],
+            "posture": "roman",
+            "vertical_position": "baseline",
+            "weight": "normal"
+          },
+          "span_id": "pdf:aa1ef056169f:page:0398:block:0003:span:0001",
+          "text": "Nhà tôi có bé gái học hành thì “lởm khởm” mà nghịch như chuột nhắt suốt ngày, rất khó cho vào khuôn khổ, thi thoảng lại phải xách roi thị uy."
+        }
+      ],
+      "dominant_language": "vi",
+      "heading_level_hint": null,
+      "heading_role_hint": "unknown",
+      "marker": null,
+      "region": null,
+      "role_hint": "paragraph",
+      "sequence_index": 2
+    },
+    {
+      "alignment": "justify",
+      "block_id": "pdf:aa1ef056169f:page:0398:block:0004",
+      "content": [
+        {
+          "language": "vi",
+          "semantic_line_break_after": false,
+          "source_typography": {
+            "caps_style": "normal",
+            "decorations": [],
+            "posture": "roman",
+            "vertical_position": "baseline",
+            "weight": "normal"
+          },
+          "span_id": "pdf:aa1ef056169f:page:0398:block:0004:span:0001",
+          "text": "Sau khi bắt nằm úp xuống giường phân tích, đe nẹt đủ kiểu và “thưởng cho” vài con lươn thì đến phần truy tìm nguyên nhân để khắc phục, chị chàng thút thít:"
+        }
+      ],
+      "dominant_language": "vi",
+      "heading_level_hint": null,
+      "heading_role_hint": "unknown",
+      "marker": null,
+      "region": null,
+      "role_hint": "paragraph",
+      "sequence_index": 3
+    },
+    {
+      "alignment": "left",
+      "block_id": "pdf:aa1ef056169f:page:0398:block:0005",
+      "content": [
+        {
+          "language": "vi",
+          "semantic_line_break_after": false,
+          "source_typography": {
+            "caps_style": "normal",
+            "decorations": [],
+            "posture": "roman",
+            "vertical_position": "baseline",
+            "weight": "normal"
+          },
+          "span_id": "pdf:aa1ef056169f:page:0398:block:0005:span:0001",
+          "text": "– Tại con nói chuyện riêng nên bị chậm."
+        }
+      ],
+      "dominant_language": "vi",
+      "heading_level_hint": null,
+      "heading_role_hint": "unknown",
+      "marker": null,
+      "region": null,
+      "role_hint": "paragraph",
+      "sequence_index": 4
+    },
+    {
+      "alignment": "justify",
+      "block_id": "pdf:aa1ef056169f:page:0398:block:0006",
+      "content": [
+        {
+          "language": "vi",
+          "semantic_line_break_after": false,
+          "source_typography": {
+            "caps_style": "normal",
+            "decorations": [],
+            "posture": "roman",
+            "vertical_position": "baseline",
+            "weight": "normal"
+          },
+          "span_id": "pdf:aa1ef056169f:page:0398:block:0006:span:0001",
+          "text": "Đang như thần sấm bỗng mất hết nhuệ khí, buông roi nghĩ thầm “may mà nó không đi họp lớp cùng mẹ”."
+        }
+      ],
+      "dominant_language": "vi",
+      "heading_level_hint": null,
+      "heading_role_hint": "unknown",
+      "marker": null,
+      "region": null,
+      "role_hint": "paragraph",
+      "sequence_index": 5
+    },
+    {
+      "alignment": "justify",
+      "block_id": "pdf:aa1ef056169f:page:0398:block:0007",
+      "content": [
+        {
+          "language": "vi",
+          "semantic_line_break_after": false,
+          "source_typography": {
+            "caps_style": "normal",
+            "decorations": [],
+            "posture": "roman",
+            "vertical_position": "baseline",
+            "weight": "normal"
+          },
+          "span_id": "pdf:aa1ef056169f:page:0398:block:0007:span:0001",
+          "text": "Sáng ra nghe lỏm được câu chuyện hai chị em trao đổi trong bữa ăn. Con chị bảo:"
+        }
+      ],
+      "dominant_language": "vi",
+      "heading_level_hint": null,
+      "heading_role_hint": "unknown",
+      "marker": null,
+      "region": null,
+      "role_hint": "paragraph",
+      "sequence_index": 6
+    },
+    {
+      "alignment": "justify",
+      "block_id": "pdf:aa1ef056169f:page:0398:block:0008",
+      "content": [
+        {
+          "language": "vi",
+          "semantic_line_break_after": false,
+          "source_typography": {
+            "caps_style": "normal",
+            "decorations": [],
+            "posture": "roman",
+            "vertical_position": "baseline",
+            "weight": "normal"
+          },
+          "span_id": "pdf:aa1ef056169f:page:0398:block:0008:span:0001",
+          "text": "– Ngốc thế, mẹ hỏi tội này mấy roi thì lại nhận là 10 roi, nhận 1, 2 roi thôi đỡ đau chứ. Lần sau, nếu tái phạm lại nhận 100 roi thì muốn vào viện à?"
+        }
+      ],
+      "dominant_language": "vi",
+      "heading_level_hint": null,
+      "heading_role_hint": "unknown",
+      "marker": null,
+      "region": null,
+      "role_hint": "paragraph",
+      "sequence_index": 7
+    },
+    {
+      "alignment": "left",
+      "block_id": "pdf:aa1ef056169f:page:0398:block:0009",
+      "content": [
+        {
+          "language": "vi",
+          "semantic_line_break_after": false,
+          "source_typography": {
+            "caps_style": "normal",
+            "decorations": [],
+            "posture": "roman",
+            "vertical_position": "baseline",
+            "weight": "normal"
+          },
+          "span_id": "pdf:aa1ef056169f:page:0398:block:0009:span:0001",
+          "text": "– Thì em trót nhận thế rồi."
+        }
+      ],
+      "dominant_language": "vi",
+      "heading_level_hint": null,
+      "heading_role_hint": "unknown",
+      "marker": null,
+      "region": null,
+      "role_hint": "paragraph",
+      "sequence_index": 8
+    },
+    {
+      "alignment": "left",
+      "block_id": "pdf:aa1ef056169f:page:0398:block:0010",
+      "content": [
+        {
+          "language": "vi",
+          "semantic_line_break_after": false,
+          "source_typography": {
+            "caps_style": "normal",
+            "decorations": [],
+            "posture": "roman",
+            "vertical_position": "baseline",
+            "weight": "normal"
+          },
+          "span_id": "pdf:aa1ef056169f:page:0398:block:0010:span:0001",
+          "text": "– Thế thì phải xin giảm án chứ !"
+        }
+      ],
+      "dominant_language": "vi",
+      "heading_level_hint": null,
+      "heading_role_hint": "unknown",
+      "marker": null,
+      "region": null,
+      "role_hint": "paragraph",
+      "sequence_index": 9
+    },
+    {
+      "alignment": "left",
+      "block_id": "pdf:aa1ef056169f:page:0398:block:0011",
+      "content": [
+        {
+          "language": "vi",
+          "semantic_line_break_after": false,
+          "source_typography": {
+            "caps_style": "normal",
+            "decorations": [],
+            "posture": "roman",
+            "vertical_position": "baseline",
+            "weight": "normal"
+          },
+          "span_id": "pdf:aa1ef056169f:page:0398:block:0011:span:0001",
+          "text": "Dạy con gian nan quá chị Hồ Thị Hải Âu ạ!"
+        }
+      ],
+      "dominant_language": "vi",
+      "heading_level_hint": null,
+      "heading_role_hint": "unknown",
+      "marker": null,
+      "region": null,
+      "role_hint": "paragraph",
+      "sequence_index": 10
+    },
+    {
+      "alignment": "left",
+      "block_id": "pdf:aa1ef056169f:page:0398:block:0012",
+      "content": [
+        {
+          "language": "vi",
+          "semantic_line_break_after": false,
+          "source_typography": {
+            "caps_style": "normal",
+            "decorations": [],
+            "posture": "italic",
+            "vertical_position": "baseline",
+            "weight": "normal"
+          },
+          "span_id": "pdf:aa1ef056169f:page:0398:block:0012:span:0001",
+          "text": "Và đây là cách ứng xử của tôi:"
+        }
+      ],
+      "dominant_language": "vi",
+      "heading_level_hint": null,
+      "heading_role_hint": "unknown",
+      "marker": null,
+      "region": null,
+      "role_hint": "paragraph",
+      "sequence_index": 11
+    },
+    {
+      "alignment": "justify",
+      "block_id": "pdf:aa1ef056169f:page:0398:block:0013",
+      "content": [
+        {
+          "language": "vi",
+          "semantic_line_break_after": false,
+          "source_typography": {
+            "caps_style": "normal",
+            "decorations": [],
+            "posture": "roman",
+            "vertical_position": "baseline",
+            "weight": "normal"
+          },
+          "span_id": "pdf:aa1ef056169f:page:0398:block:0013:span:0001",
+          "text": "Cảm ơn em Thanh Nga, đây là điều mà mọi người thường xuyên đặt ra cho chị, những thắc mắc tương tự, tựu trung để giải đáp câu hỏi “Vì sao chị làm bạn được với con gái?”. Tình huống em đưa ra cho chị rất trực quan sinh động và có tính phổ biến, vì thế chị xin phép em được chia sẻ câu chuyện cùng nhiều người quan tâm."
+        }
+      ],
+      "dominant_language": "vi",
+      "heading_level_hint": null,
+      "heading_role_hint": "unknown",
+      "marker": null,
+      "region": null,
+      "role_hint": "paragraph",
+      "sequence_index": 12
+    },
+    {
+      "alignment": "justify",
+      "block_id": "pdf:aa1ef056169f:page:0398:block:0014",
+      "content": [
+        {
+          "language": "vi",
+          "semantic_line_break_after": false,
+          "source_typography": {
+            "caps_style": "normal",
+            "decorations": [],
+            "posture": "roman",
+            "vertical_position": "baseline",
+            "weight": "normal"
+          },
+          "span_id": "pdf:aa1ef056169f:page:0398:block:0014:span:0001",
+          "text": "Trong thực tế cuộc sống với nhiều trải nghiệm và quan sát, tôi nhận ra rằng hầu như mọi người mẹ, người cha đều"
+        }
+      ],
+      "dominant_language": "vi",
+      "heading_level_hint": null,
+      "heading_role_hint": "unknown",
+      "marker": null,
+      "region": null,
+      "role_hint": "paragraph",
+      "sequence_index": 13
+    },
+    {
+      "alignment": "left",
+      "block_id": "pdf:aa1ef056169f:page:0398:block:0015",
+      "content": [
+        {
+          "language": null,
+          "semantic_line_break_after": false,
+          "source_typography": {
+            "caps_style": "normal",
+            "decorations": [],
+            "posture": "roman",
+            "vertical_position": "baseline",
+            "weight": "normal"
+          },
+          "span_id": "pdf:aa1ef056169f:page:0398:block:0015:span:0001",
+          "text": "398"
+        }
+      ],
+      "dominant_language": null,
+      "heading_level_hint": null,
+      "heading_role_hint": "unknown",
+      "marker": null,
+      "region": null,
+      "role_hint": "page_number",
+      "sequence_index": 14
+    },
+    {
+      "alignment": "left",
+      "block_id": "pdf:aa1ef056169f:page:0398:block:0016",
+      "content": [
+        {
+          "language": "vi",
+          "semantic_line_break_after": false,
+          "source_typography": {
+            "caps_style": "normal",
+            "decorations": [],
+            "posture": "roman",
+            "vertical_position": "baseline",
+            "weight": "normal"
+          },
+          "span_id": "pdf:aa1ef056169f:page:0398:block:0016:span:0001",
+          "text": "18 NĂM KIM CƯƠNG"
+        }
+      ],
+      "dominant_language": "vi",
+      "heading_level_hint": null,
+      "heading_role_hint": "unknown",
+      "marker": null,
+      "region": null,
+      "role_hint": "page_footer",
+      "sequence_index": 15
+    }
+  ],
+  "dominant_language": "vi",
+  "page_id": "pdf:aa1ef056169f:page:0398",
+  "page_kind_hint": "text",
+  "printed_page_number": "398",
+  "source": {
+    "media_type": "application/x.siftforge.pdf-page",
+    "metadata": {
+      "fixture_origin": "real-extraction-run",
+      "page_number": 398
+    },
+    "sha256": "0c3db4c5d17698de3babc0aba8cdbd76c4567e5e95f4e03d8972311aa9c71bea",
+    "source_id": "pdf:aa1ef056169f:page:0398",
+    "uri": "fixture://18-nam-kim-cuong/page/0398"
+  },
+  "warnings": []
+}

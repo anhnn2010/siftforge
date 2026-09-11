@@ -1,0 +1,11 @@
+{
+  "case_id": "page-0378",
+  "model": "gemini-3.6-flash",
+  "prompt_version": "5",
+  "schema_version": "5",
+  "source_page_number": 378,
+  "tags": [
+    "ordered-list",
+    "list-recovery"
+  ]
+}

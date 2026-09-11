@@ -1,0 +1,12 @@
+{
+  "case_id": "page-0152",
+  "model": "gemini-3.6-flash",
+  "prompt_version": "5.1",
+  "schema_version": "5",
+  "source_page_number": 152,
+  "tags": [
+    "verse",
+    "list",
+    "heading-wrap"
+  ]
+}

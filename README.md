@@ -465,3 +465,42 @@ The resolver intentionally does **not** parse author names, dates, affiliation
 text, or translation semantics from prose. If v5 page evidence does not expose
 an explicit attribution or quote role, the structural pass leaves that content
 unchanged for a later semantic resolver.
+
+## Milestone 1F-8 - Real-run golden regression fixture harness
+
+Milestone 1F-8 turns the accepted v5 extraction pages into a checked-in,
+data-driven regression suite. The fixtures are copied from real
+`gemini-3.6-flash` runs rather than synthetic examples, while local filesystem
+paths and unrelated source metadata are sanitized before they enter the
+repository. Page images and raw provider responses are deliberately excluded;
+the suite stores only normalized page evidence plus small provenance metadata.
+
+The first golden set covers pages 18, 68, 116, 152, 378, 397, 398, 402, and
+412. Together they protect the most important positive and negative cases found
+through manual book testing:
+
+- local roman/italic typography boundaries and superscript evidence
+- semantic verse lines and final-line break convention
+- multiple source-backed figures with normalized crop regions and captions
+- physical heading wrapping versus semantic verse line breaks
+- graphic list-marker evidence separated from readable item text
+- ordered-list recovery for items 10-17
+- dash-prefixed dialogue that must not become a list
+- italic author-transition text between narrative regions
+- scenario label/title roles with graphic markers
+- graphic-marked dialogue that is visually list-like but semantically prose
+
+`GoldenPageFixtureLoader` revalidates every stored normalized page through the
+strict v5 normalizer. It also verifies deterministic page/block/span IDs before
+a fixture can be used. This makes fixture corruption or normalized-artifact
+drift fail early instead of silently changing structural expectations.
+
+The suite intentionally asserts semantic facts rather than byte-for-byte
+snapshots of every derived object. For example, page 116 asserts two figures
+and their source regions, while page 397 asserts that dash dialogue produces no
+`ListNode`. This keeps the goldens sensitive to meaningful regressions without
+making harmless internal refactors unnecessarily expensive.
+
+The current fixtures retain their actual extraction provenance: pages 18, 68,
+152, 398, 402, and 412 came from prompt 5.1, while pages 116, 378, and 397 came
+from prompt 5. All use schema v5 and `gemini-3.6-flash`.

@@ -1,0 +1,12 @@
+{
+  "case_id": "page-0018",
+  "model": "gemini-3.6-flash",
+  "prompt_version": "5.1",
+  "schema_version": "5",
+  "source_page_number": 18,
+  "tags": [
+    "mixed-language",
+    "typography",
+    "superscript"
+  ]
+}

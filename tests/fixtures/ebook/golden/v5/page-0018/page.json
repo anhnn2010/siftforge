@@ -1,0 +1,357 @@
+{
+  "blocks": [
+    {
+      "alignment": "justify",
+      "block_id": "pdf:aa1ef056169f:page:0018:block:0001",
+      "content": [
+        {
+          "language": "vi",
+          "semantic_line_break_after": false,
+          "source_typography": {
+            "caps_style": "normal",
+            "decorations": [],
+            "posture": "italic",
+            "vertical_position": "baseline",
+            "weight": "normal"
+          },
+          "span_id": "pdf:aa1ef056169f:page:0018:block:0001:span:0001",
+          "text": "bước trưởng thành của tôi, hay những người mà sự hiện diện của họ làm tôi trân trọng hơn bất cứ gì!"
+        }
+      ],
+      "dominant_language": "vi",
+      "heading_level_hint": null,
+      "heading_role_hint": "unknown",
+      "marker": null,
+      "region": null,
+      "role_hint": "paragraph",
+      "sequence_index": 0
+    },
+    {
+      "alignment": "justify",
+      "block_id": "pdf:aa1ef056169f:page:0018:block:0002",
+      "content": [
+        {
+          "language": "vi",
+          "semantic_line_break_after": false,
+          "source_typography": {
+            "caps_style": "normal",
+            "decorations": [],
+            "posture": "italic",
+            "vertical_position": "baseline",
+            "weight": "normal"
+          },
+          "span_id": "pdf:aa1ef056169f:page:0018:block:0002:span:0001",
+          "text": "Tôi đã tìm thấy bản thân mình ở nơi đây và tận hưởng niềm hạnh phúc nhìn thấy sự trưởng thành của bản thân, từng chút, từng chút một. Tôi cảm thấy biết ơn tất cả những người đã giúp tôi được ở đây ngày hôm nay."
+        }
+      ],
+      "dominant_language": "vi",
+      "heading_level_hint": null,
+      "heading_role_hint": "unknown",
+      "marker": null,
+      "region": null,
+      "role_hint": "paragraph",
+      "sequence_index": 1
+    },
+    {
+      "alignment": "justify",
+      "block_id": "pdf:aa1ef056169f:page:0018:block:0003",
+      "content": [
+        {
+          "language": "vi",
+          "semantic_line_break_after": false,
+          "source_typography": {
+            "caps_style": "normal",
+            "decorations": [],
+            "posture": "italic",
+            "vertical_position": "baseline",
+            "weight": "normal"
+          },
+          "span_id": "pdf:aa1ef056169f:page:0018:block:0003:span:0001",
+          "text": "Tôi biết ơn Mẹ, người bạn tri kỷ và người đồng hành tuyệt vời nhất của tôi, người luôn đặt lòng tin vào tôi ngay cả khi tôi hoài nghi bản thân mình nhất, người không bao giờ hỏi tôi về tình yêu của tôi dành cho bà ấy ngay cả trong những giây phút ương bướng, nổi loạn nhất của tuổi dậy thì."
+        }
+      ],
+      "dominant_language": "vi",
+      "heading_level_hint": null,
+      "heading_role_hint": "unknown",
+      "marker": null,
+      "region": null,
+      "role_hint": "paragraph",
+      "sequence_index": 2
+    },
+    {
+      "alignment": "justify",
+      "block_id": "pdf:aa1ef056169f:page:0018:block:0004",
+      "content": [
+        {
+          "language": "vi",
+          "semantic_line_break_after": false,
+          "source_typography": {
+            "caps_style": "normal",
+            "decorations": [],
+            "posture": "italic",
+            "vertical_position": "baseline",
+            "weight": "normal"
+          },
+          "span_id": "pdf:aa1ef056169f:page:0018:block:0004:span:0001",
+          "text": "Một người đặc biệt tôi gặp ở Harvard đã có lần nói với tôi: “Tôi làm việc chăm chỉ để ‘một tôi thành công’ của tương lai sẽ nhìn và cảm ơn ‘tôi của hiện tại’."
+        }
+      ],
+      "dominant_language": "vi",
+      "heading_level_hint": null,
+      "heading_role_hint": "unknown",
+      "marker": null,
+      "region": null,
+      "role_hint": "paragraph",
+      "sequence_index": 3
+    },
+    {
+      "alignment": "justify",
+      "block_id": "pdf:aa1ef056169f:page:0018:block:0005",
+      "content": [
+        {
+          "language": "vi",
+          "semantic_line_break_after": false,
+          "source_typography": {
+            "caps_style": "normal",
+            "decorations": [],
+            "posture": "italic",
+            "vertical_position": "baseline",
+            "weight": "normal"
+          },
+          "span_id": "pdf:aa1ef056169f:page:0018:block:0005:span:0001",
+          "text": "Vâng, đây là lời cảm tạ cho “tôi của quá khứ”, vì đã luôn lao động và học tập chăm chỉ, hy sinh như có thể, để tôi có được “tôi của hôm nay”."
+        }
+      ],
+      "dominant_language": "vi",
+      "heading_level_hint": null,
+      "heading_role_hint": "unknown",
+      "marker": null,
+      "region": null,
+      "role_hint": "paragraph",
+      "sequence_index": 4
+    },
+    {
+      "alignment": "justify",
+      "block_id": "pdf:aa1ef056169f:page:0018:block:0006",
+      "content": [
+        {
+          "language": "vi",
+          "semantic_line_break_after": false,
+          "source_typography": {
+            "caps_style": "normal",
+            "decorations": [],
+            "posture": "italic",
+            "vertical_position": "baseline",
+            "weight": "normal"
+          },
+          "span_id": "pdf:aa1ef056169f:page:0018:block:0006:span:0001",
+          "text": "Và, tôi đã sẵn sàng cho tất cả để chào đón những thách thức và khó khăn đang chờ tôi phía trước, bởi thành công của ngày mai sẽ đặt tên cho công việc tôi làm ngày hôm nay”."
+        }
+      ],
+      "dominant_language": "vi",
+      "heading_level_hint": null,
+      "heading_role_hint": "unknown",
+      "marker": null,
+      "region": null,
+      "role_hint": "paragraph",
+      "sequence_index": 5
+    },
+    {
+      "alignment": "left",
+      "block_id": "pdf:aa1ef056169f:page:0018:block:0007",
+      "content": [
+        {
+          "language": "vi",
+          "semantic_line_break_after": false,
+          "source_typography": {
+            "caps_style": "normal",
+            "decorations": [],
+            "posture": "roman",
+            "vertical_position": "baseline",
+            "weight": "normal"
+          },
+          "span_id": "pdf:aa1ef056169f:page:0018:block:0007:span:0001",
+          "text": "Nguyên văn bản tiếng Anh:"
+        }
+      ],
+      "dominant_language": "vi",
+      "heading_level_hint": null,
+      "heading_role_hint": "unknown",
+      "marker": null,
+      "region": null,
+      "role_hint": "paragraph",
+      "sequence_index": 6
+    },
+    {
+      "alignment": "left",
+      "block_id": "pdf:aa1ef056169f:page:0018:block:0008",
+      "content": [
+        {
+          "language": "en",
+          "semantic_line_break_after": false,
+          "source_typography": {
+            "caps_style": "normal",
+            "decorations": [],
+            "posture": "italic",
+            "vertical_position": "baseline",
+            "weight": "normal"
+          },
+          "span_id": "pdf:aa1ef056169f:page:0018:block:0008:span:0001",
+          "text": "December 13"
+        },
+        {
+          "language": "en",
+          "semantic_line_break_after": false,
+          "source_typography": {
+            "caps_style": "normal",
+            "decorations": [],
+            "posture": "italic",
+            "vertical_position": "superscript",
+            "weight": "normal"
+          },
+          "span_id": "pdf:aa1ef056169f:page:0018:block:0008:span:0002",
+          "text": "th"
+        },
+        {
+          "language": "en",
+          "semantic_line_break_after": false,
+          "source_typography": {
+            "caps_style": "normal",
+            "decorations": [],
+            "posture": "italic",
+            "vertical_position": "baseline",
+            "weight": "normal"
+          },
+          "span_id": "pdf:aa1ef056169f:page:0018:block:0008:span:0003",
+          "text": ", 2014"
+        }
+      ],
+      "dominant_language": "en",
+      "heading_level_hint": null,
+      "heading_role_hint": "unknown",
+      "marker": null,
+      "region": null,
+      "role_hint": "paragraph",
+      "sequence_index": 7
+    },
+    {
+      "alignment": "justify",
+      "block_id": "pdf:aa1ef056169f:page:0018:block:0009",
+      "content": [
+        {
+          "language": "en",
+          "semantic_line_break_after": false,
+          "source_typography": {
+            "caps_style": "normal",
+            "decorations": [],
+            "posture": "italic",
+            "vertical_position": "baseline",
+            "weight": "normal"
+          },
+          "span_id": "pdf:aa1ef056169f:page:0018:block:0009:span:0001",
+          "text": "It astounds me to think about how far I have gone down the road in 365 days, or how much I have been changed by a place half the globe away from where I come from... It was Friday the 13"
+        },
+        {
+          "language": "en",
+          "semantic_line_break_after": false,
+          "source_typography": {
+            "caps_style": "normal",
+            "decorations": [],
+            "posture": "italic",
+            "vertical_position": "superscript",
+            "weight": "normal"
+          },
+          "span_id": "pdf:aa1ef056169f:page:0018:block:0009:span:0002",
+          "text": "th"
+        },
+        {
+          "language": "en",
+          "semantic_line_break_after": false,
+          "source_typography": {
+            "caps_style": "normal",
+            "decorations": [],
+            "posture": "italic",
+            "vertical_position": "baseline",
+            "weight": "normal"
+          },
+          "span_id": "pdf:aa1ef056169f:page:0018:block:0009:span:0003",
+          "text": ", 3:29 pm Harvard time that the email came, so phlegmatically that it made me speechless. We hugged; I could feel Mom’s heart beat fast in joy. I thought I would scream, would engage in a frantic dance, would call up everybody I know at 3:30 am in the morning. But Mom once said that, when you have worked hard enough, the happiness of success will come in a composed manner. There was an excitement but also"
+        }
+      ],
+      "dominant_language": "en",
+      "heading_level_hint": null,
+      "heading_role_hint": "unknown",
+      "marker": null,
+      "region": null,
+      "role_hint": "paragraph",
+      "sequence_index": 8
+    },
+    {
+      "alignment": "left",
+      "block_id": "pdf:aa1ef056169f:page:0018:block:0010",
+      "content": [
+        {
+          "language": null,
+          "semantic_line_break_after": false,
+          "source_typography": {
+            "caps_style": "normal",
+            "decorations": [],
+            "posture": "roman",
+            "vertical_position": "baseline",
+            "weight": "normal"
+          },
+          "span_id": "pdf:aa1ef056169f:page:0018:block:0010:span:0001",
+          "text": "18"
+        }
+      ],
+      "dominant_language": null,
+      "heading_level_hint": null,
+      "heading_role_hint": "unknown",
+      "marker": null,
+      "region": null,
+      "role_hint": "page_number",
+      "sequence_index": 9
+    },
+    {
+      "alignment": "left",
+      "block_id": "pdf:aa1ef056169f:page:0018:block:0011",
+      "content": [
+        {
+          "language": "vi",
+          "semantic_line_break_after": false,
+          "source_typography": {
+            "caps_style": "normal",
+            "decorations": [],
+            "posture": "roman",
+            "vertical_position": "baseline",
+            "weight": "normal"
+          },
+          "span_id": "pdf:aa1ef056169f:page:0018:block:0011:span:0001",
+          "text": "18 NĂM KIM CƯƠNG"
+        }
+      ],
+      "dominant_language": "vi",
+      "heading_level_hint": null,
+      "heading_role_hint": "unknown",
+      "marker": null,
+      "region": null,
+      "role_hint": "page_footer",
+      "sequence_index": 10
+    }
+  ],
+  "dominant_language": "vi",
+  "page_id": "pdf:aa1ef056169f:page:0018",
+  "page_kind_hint": "text",
+  "printed_page_number": "18",
+  "source": {
+    "media_type": "application/x.siftforge.pdf-page",
+    "metadata": {
+      "fixture_origin": "real-extraction-run",
+      "page_number": 18
+    },
+    "sha256": "abc294d3d057bf3a8e93c3098ea0d57cadc5c1b8f87d51deae94665f72775efe",
+    "source_id": "pdf:aa1ef056169f:page:0018",
+    "uri": "fixture://18-nam-kim-cuong/page/0018"
+  },
+  "warnings": []
+}

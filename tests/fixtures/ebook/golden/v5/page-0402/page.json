@@ -1,0 +1,361 @@
+{
+  "blocks": [
+    {
+      "alignment": "justify",
+      "block_id": "pdf:aa1ef056169f:page:0402:block:0001",
+      "content": [
+        {
+          "language": "vi",
+          "semantic_line_break_after": false,
+          "source_typography": {
+            "caps_style": "normal",
+            "decorations": [],
+            "posture": "roman",
+            "vertical_position": "baseline",
+            "weight": "normal"
+          },
+          "span_id": "pdf:aa1ef056169f:page:0402:block:0001:span:0001",
+          "text": "Câu nói tôi thường được nghe là: “Con chị ngoan hiền dễ dạy, chứ con nhà em cá tính lắm, khó dạy lắm!”."
+        }
+      ],
+      "dominant_language": "vi",
+      "heading_level_hint": null,
+      "heading_role_hint": "unknown",
+      "marker": null,
+      "region": null,
+      "role_hint": "paragraph",
+      "sequence_index": 0
+    },
+    {
+      "alignment": "justify",
+      "block_id": "pdf:aa1ef056169f:page:0402:block:0002",
+      "content": [
+        {
+          "language": "vi",
+          "semantic_line_break_after": false,
+          "source_typography": {
+            "caps_style": "normal",
+            "decorations": [],
+            "posture": "roman",
+            "vertical_position": "baseline",
+            "weight": "normal"
+          },
+          "span_id": "pdf:aa1ef056169f:page:0402:block:0002:span:0001",
+          "text": "Bạn đừng nhầm lẫn hai khái niệm này trong huấn luyện trẻ vì như vậy thật là lãng phí."
+        }
+      ],
+      "dominant_language": "vi",
+      "heading_level_hint": null,
+      "heading_role_hint": "unknown",
+      "marker": null,
+      "region": null,
+      "role_hint": "paragraph",
+      "sequence_index": 1
+    },
+    {
+      "alignment": "justify",
+      "block_id": "pdf:aa1ef056169f:page:0402:block:0003",
+      "content": [
+        {
+          "language": "vi",
+          "semantic_line_break_after": false,
+          "source_typography": {
+            "caps_style": "normal",
+            "decorations": [],
+            "posture": "roman",
+            "vertical_position": "baseline",
+            "weight": "normal"
+          },
+          "span_id": "pdf:aa1ef056169f:page:0402:block:0003:span:0001",
+          "text": "Có trẻ thì có cá tính mạnh, có trẻ thì biếng ăn hay có một chứng tật nào đó, v.v... không đứa trẻ nào bắt đầu đã hoàn hảo! Do đó, cha mẹ cần nỗ lực nhiều hơn 10 lần, 20 hoặc hơn thế nữa, không có con đường nào khác, để giúp trẻ có được “trật tự nội tâm”, “kỷ luật nội tâm”. Khi làm được như vậy, chắc chắn trẻ sẽ rất sáng tạo, mạnh mẽ nội lực và lan tỏa đến xung quanh!"
+        }
+      ],
+      "dominant_language": "vi",
+      "heading_level_hint": null,
+      "heading_role_hint": "unknown",
+      "marker": null,
+      "region": null,
+      "role_hint": "paragraph",
+      "sequence_index": 2
+    },
+    {
+      "alignment": "center",
+      "block_id": "pdf:aa1ef056169f:page:0402:block:0004",
+      "content": [
+        {
+          "language": "vi",
+          "semantic_line_break_after": false,
+          "source_typography": {
+            "caps_style": "normal",
+            "decorations": [],
+            "posture": "roman",
+            "vertical_position": "baseline",
+            "weight": "normal"
+          },
+          "span_id": "pdf:aa1ef056169f:page:0402:block:0004:span:0001",
+          "text": "TÌNH HUỐNG"
+        }
+      ],
+      "dominant_language": "vi",
+      "heading_level_hint": 2,
+      "heading_role_hint": "scenario_label",
+      "marker": {
+        "kind": "graphic",
+        "ordinal": null,
+        "raw_text": null
+      },
+      "region": null,
+      "role_hint": "heading",
+      "sequence_index": 3
+    },
+    {
+      "alignment": "center",
+      "block_id": "pdf:aa1ef056169f:page:0402:block:0005",
+      "content": [
+        {
+          "language": "vi",
+          "semantic_line_break_after": false,
+          "source_typography": {
+            "caps_style": "normal",
+            "decorations": [],
+            "posture": "roman",
+            "vertical_position": "baseline",
+            "weight": "bold"
+          },
+          "span_id": "pdf:aa1ef056169f:page:0402:block:0005:span:0001",
+          "text": "Bật lại!"
+        }
+      ],
+      "dominant_language": "vi",
+      "heading_level_hint": 3,
+      "heading_role_hint": "scenario_title",
+      "marker": null,
+      "region": null,
+      "role_hint": "heading",
+      "sequence_index": 4
+    },
+    {
+      "alignment": "justify",
+      "block_id": "pdf:aa1ef056169f:page:0402:block:0006",
+      "content": [
+        {
+          "language": "vi",
+          "semantic_line_break_after": false,
+          "source_typography": {
+            "caps_style": "normal",
+            "decorations": [],
+            "posture": "roman",
+            "vertical_position": "baseline",
+            "weight": "normal"
+          },
+          "span_id": "pdf:aa1ef056169f:page:0402:block:0006:span:0001",
+          "text": "Bước vào tuổi vị thành niên, Minh Khuê có biểu hiện hay lườm nguýt mẹ mỗi khi bất đồng ý kiến. Một lần, tôi bắt gặp cái lườm dài của con gái, nén nỗi tổn thương trong lòng, tôi bảo:"
+        }
+      ],
+      "dominant_language": "vi",
+      "heading_level_hint": null,
+      "heading_role_hint": "unknown",
+      "marker": null,
+      "region": null,
+      "role_hint": "paragraph",
+      "sequence_index": 5
+    },
+    {
+      "alignment": "justify",
+      "block_id": "pdf:aa1ef056169f:page:0402:block:0007",
+      "content": [
+        {
+          "language": "vi",
+          "semantic_line_break_after": false,
+          "source_typography": {
+            "caps_style": "normal",
+            "decorations": [],
+            "posture": "roman",
+            "vertical_position": "baseline",
+            "weight": "normal"
+          },
+          "span_id": "pdf:aa1ef056169f:page:0402:block:0007:span:0001",
+          "text": "“Khi bất đồng ý kiến thì con nên thẳng thắn thể hiện quan điểm, không nên lườm nguýt, đó là biểu hiện thiếu đàng hoàng!”"
+        }
+      ],
+      "dominant_language": "vi",
+      "heading_level_hint": null,
+      "heading_role_hint": "unknown",
+      "marker": null,
+      "region": null,
+      "role_hint": "paragraph",
+      "sequence_index": 6
+    },
+    {
+      "alignment": "justify",
+      "block_id": "pdf:aa1ef056169f:page:0402:block:0008",
+      "content": [
+        {
+          "language": "vi",
+          "semantic_line_break_after": false,
+          "source_typography": {
+            "caps_style": "normal",
+            "decorations": [],
+            "posture": "roman",
+            "vertical_position": "baseline",
+            "weight": "normal"
+          },
+          "span_id": "pdf:aa1ef056169f:page:0402:block:0008:span:0001",
+          "text": "“Con không lườm nguýt, nếu mẹ không nhìn trộm con, sao mẹ biết con lườm nguýt?”"
+        }
+      ],
+      "dominant_language": "vi",
+      "heading_level_hint": null,
+      "heading_role_hint": "unknown",
+      "marker": null,
+      "region": null,
+      "role_hint": "paragraph",
+      "sequence_index": 7
+    },
+    {
+      "alignment": "justify",
+      "block_id": "pdf:aa1ef056169f:page:0402:block:0009",
+      "content": [
+        {
+          "language": "vi",
+          "semantic_line_break_after": false,
+          "source_typography": {
+            "caps_style": "normal",
+            "decorations": [],
+            "posture": "roman",
+            "vertical_position": "baseline",
+            "weight": "normal"
+          },
+          "span_id": "pdf:aa1ef056169f:page:0402:block:0009:span:0001",
+          "text": "“Mẹ bất chợt quay lại và nhìn thấy!”"
+        }
+      ],
+      "dominant_language": "vi",
+      "heading_level_hint": null,
+      "heading_role_hint": "unknown",
+      "marker": null,
+      "region": null,
+      "role_hint": "paragraph",
+      "sequence_index": 8
+    },
+    {
+      "alignment": "justify",
+      "block_id": "pdf:aa1ef056169f:page:0402:block:0010",
+      "content": [
+        {
+          "language": "vi",
+          "semantic_line_break_after": false,
+          "source_typography": {
+            "caps_style": "normal",
+            "decorations": [],
+            "posture": "roman",
+            "vertical_position": "baseline",
+            "weight": "normal"
+          },
+          "span_id": "pdf:aa1ef056169f:page:0402:block:0010:span:0001",
+          "text": "“Tại sao mẹ cứ áp đặt cách hiểu của mẹ? Con khẳng định là con không lườm nguýt!”"
+        }
+      ],
+      "dominant_language": "vi",
+      "heading_level_hint": null,
+      "heading_role_hint": "unknown",
+      "marker": null,
+      "region": null,
+      "role_hint": "paragraph",
+      "sequence_index": 9
+    },
+    {
+      "alignment": "justify",
+      "block_id": "pdf:aa1ef056169f:page:0402:block:0011",
+      "content": [
+        {
+          "language": "vi",
+          "semantic_line_break_after": false,
+          "source_typography": {
+            "caps_style": "normal",
+            "decorations": [],
+            "posture": "roman",
+            "vertical_position": "baseline",
+            "weight": "normal"
+          },
+          "span_id": "pdf:aa1ef056169f:page:0402:block:0011:span:0001",
+          "text": "Đây là một tình huống sư phạm hóc búa, và đòi hỏi người mẹ phải thật sáng suốt. Tôi nỗ lực thuyết phục con gái bằng"
+        }
+      ],
+      "dominant_language": "vi",
+      "heading_level_hint": null,
+      "heading_role_hint": "unknown",
+      "marker": null,
+      "region": null,
+      "role_hint": "paragraph",
+      "sequence_index": 10
+    },
+    {
+      "alignment": "left",
+      "block_id": "pdf:aa1ef056169f:page:0402:block:0012",
+      "content": [
+        {
+          "language": null,
+          "semantic_line_break_after": false,
+          "source_typography": {
+            "caps_style": "normal",
+            "decorations": [],
+            "posture": "roman",
+            "vertical_position": "baseline",
+            "weight": "normal"
+          },
+          "span_id": "pdf:aa1ef056169f:page:0402:block:0012:span:0001",
+          "text": "402"
+        }
+      ],
+      "dominant_language": null,
+      "heading_level_hint": null,
+      "heading_role_hint": "unknown",
+      "marker": null,
+      "region": null,
+      "role_hint": "page_number",
+      "sequence_index": 11
+    },
+    {
+      "alignment": "left",
+      "block_id": "pdf:aa1ef056169f:page:0402:block:0013",
+      "content": [
+        {
+          "language": "vi",
+          "semantic_line_break_after": false,
+          "source_typography": {
+            "caps_style": "normal",
+            "decorations": [],
+            "posture": "roman",
+            "vertical_position": "baseline",
+            "weight": "normal"
+          },
+          "span_id": "pdf:aa1ef056169f:page:0402:block:0013:span:0001",
+          "text": "18 NĂM KIM CƯƠNG"
+        }
+      ],
+      "dominant_language": "vi",
+      "heading_level_hint": null,
+      "heading_role_hint": "unknown",
+      "marker": null,
+      "region": null,
+      "role_hint": "page_footer",
+      "sequence_index": 12
+    }
+  ],
+  "dominant_language": "vi",
+  "page_id": "pdf:aa1ef056169f:page:0402",
+  "page_kind_hint": "text",
+  "printed_page_number": "402",
+  "source": {
+    "media_type": "application/x.siftforge.pdf-page",
+    "metadata": {
+      "fixture_origin": "real-extraction-run",
+      "page_number": 402
+    },
+    "sha256": "8e2c7acf8fea1553adde69ae4efea4c5bb5890d48f6a0084cad5c710118f2069",
+    "source_id": "pdf:aa1ef056169f:page:0402",
+    "uri": "fixture://18-nam-kim-cuong/page/0402"
+  },
+  "warnings": []
+}

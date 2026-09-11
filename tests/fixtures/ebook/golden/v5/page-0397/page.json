@@ -1,0 +1,383 @@
+{
+  "blocks": [
+    {
+      "alignment": "center",
+      "block_id": "pdf:aa1ef056169f:page:0397:block:0001",
+      "content": [
+        {
+          "language": "vi",
+          "semantic_line_break_after": false,
+          "source_typography": {
+            "caps_style": "normal",
+            "decorations": [],
+            "posture": "italic",
+            "vertical_position": "baseline",
+            "weight": "normal"
+          },
+          "span_id": "pdf:aa1ef056169f:page:0397:block:0001:span:0001",
+          "text": "Thuyết phục trẻ không làm những điều sai lầm mình từng mắc"
+        }
+      ],
+      "dominant_language": "vi",
+      "heading_level_hint": 1,
+      "heading_role_hint": "section_title",
+      "marker": null,
+      "region": null,
+      "role_hint": "heading",
+      "sequence_index": 0
+    },
+    {
+      "alignment": "left",
+      "block_id": "pdf:aa1ef056169f:page:0397:block:0002",
+      "content": [
+        {
+          "language": "vi",
+          "semantic_line_break_after": false,
+          "source_typography": {
+            "caps_style": "normal",
+            "decorations": [],
+            "posture": "roman",
+            "vertical_position": "baseline",
+            "weight": "bold"
+          },
+          "span_id": "pdf:aa1ef056169f:page:0397:block:0002:span:0001",
+          "text": "Cha mẹ không nên là thần tượng!"
+        }
+      ],
+      "dominant_language": "vi",
+      "heading_level_hint": 2,
+      "heading_role_hint": "subsection_title",
+      "marker": null,
+      "region": null,
+      "role_hint": "heading",
+      "sequence_index": 1
+    },
+    {
+      "alignment": "justify",
+      "block_id": "pdf:aa1ef056169f:page:0397:block:0003",
+      "content": [
+        {
+          "language": "vi",
+          "semantic_line_break_after": false,
+          "source_typography": {
+            "caps_style": "normal",
+            "decorations": [],
+            "posture": "roman",
+            "vertical_position": "baseline",
+            "weight": "normal"
+          },
+          "span_id": "pdf:aa1ef056169f:page:0397:block:0003:span:0001",
+          "text": "Tôi xin trích câu chuyện của bạn Nguyễn Thanh Nga, mời các bạn tham khảo:"
+        }
+      ],
+      "dominant_language": "vi",
+      "heading_level_hint": null,
+      "heading_role_hint": "unknown",
+      "marker": null,
+      "region": null,
+      "role_hint": "paragraph",
+      "sequence_index": 2
+    },
+    {
+      "alignment": "justify",
+      "block_id": "pdf:aa1ef056169f:page:0397:block:0004",
+      "content": [
+        {
+          "language": "vi",
+          "semantic_line_break_after": false,
+          "source_typography": {
+            "caps_style": "normal",
+            "decorations": [],
+            "posture": "roman",
+            "vertical_position": "baseline",
+            "weight": "normal"
+          },
+          "span_id": "pdf:aa1ef056169f:page:0397:block:0004:span:0001",
+          "text": "Thời cắp sách đến trường, cô giáo dạy toán thực sự là nỗi ám ảnh đối với bọn học văn chúng tôi đến nỗi, thời sinh viên tuy mỗi đứa một trường nhưng đều có chung một ác mộng là ngày mai kiểm tra toán. (Kiểm tra 1 tiết mà cô ra đến 5 đề chéo cánh.)"
+        }
+      ],
+      "dominant_language": "vi",
+      "heading_level_hint": null,
+      "heading_role_hint": "unknown",
+      "marker": null,
+      "region": null,
+      "role_hint": "paragraph",
+      "sequence_index": 3
+    },
+    {
+      "alignment": "justify",
+      "block_id": "pdf:aa1ef056169f:page:0397:block:0005",
+      "content": [
+        {
+          "language": "vi",
+          "semantic_line_break_after": false,
+          "source_typography": {
+            "caps_style": "normal",
+            "decorations": [],
+            "posture": "roman",
+            "vertical_position": "baseline",
+            "weight": "normal"
+          },
+          "span_id": "pdf:aa1ef056169f:page:0397:block:0005:span:0001",
+          "text": "Hôm họp lớp vừa rồi gặp lại cô với mái tóc bạc trắng, sà đến bên cô tí toét:"
+        }
+      ],
+      "dominant_language": "vi",
+      "heading_level_hint": null,
+      "heading_role_hint": "unknown",
+      "marker": null,
+      "region": null,
+      "role_hint": "paragraph",
+      "sequence_index": 4
+    },
+    {
+      "alignment": "left",
+      "block_id": "pdf:aa1ef056169f:page:0397:block:0006",
+      "content": [
+        {
+          "language": "vi",
+          "semantic_line_break_after": false,
+          "source_typography": {
+            "caps_style": "normal",
+            "decorations": [],
+            "posture": "roman",
+            "vertical_position": "baseline",
+            "weight": "normal"
+          },
+          "span_id": "pdf:aa1ef056169f:page:0397:block:0006:span:0001",
+          "text": "– Cô còn nhớ em không?"
+        }
+      ],
+      "dominant_language": "vi",
+      "heading_level_hint": null,
+      "heading_role_hint": "unknown",
+      "marker": null,
+      "region": null,
+      "role_hint": "paragraph",
+      "sequence_index": 5
+    },
+    {
+      "alignment": "left",
+      "block_id": "pdf:aa1ef056169f:page:0397:block:0007",
+      "content": [
+        {
+          "language": "vi",
+          "semantic_line_break_after": false,
+          "source_typography": {
+            "caps_style": "normal",
+            "decorations": [],
+            "posture": "roman",
+            "vertical_position": "baseline",
+            "weight": "normal"
+          },
+          "span_id": "pdf:aa1ef056169f:page:0397:block:0007:span:0001",
+          "text": "– Mi ở Quang Trung…"
+        }
+      ],
+      "dominant_language": "vi",
+      "heading_level_hint": null,
+      "heading_role_hint": "unknown",
+      "marker": null,
+      "region": null,
+      "role_hint": "paragraph",
+      "sequence_index": 6
+    },
+    {
+      "alignment": "justify",
+      "block_id": "pdf:aa1ef056169f:page:0397:block:0008",
+      "content": [
+        {
+          "language": "vi",
+          "semantic_line_break_after": false,
+          "source_typography": {
+            "caps_style": "normal",
+            "decorations": [],
+            "posture": "roman",
+            "vertical_position": "baseline",
+            "weight": "normal"
+          },
+          "span_id": "pdf:aa1ef056169f:page:0397:block:0008:span:0001",
+          "text": "Đang cười khoái chí vì cô vẫn nhớ chút thông tin về tôi, thì cô tiếp:"
+        }
+      ],
+      "dominant_language": "vi",
+      "heading_level_hint": null,
+      "heading_role_hint": "unknown",
+      "marker": null,
+      "region": null,
+      "role_hint": "paragraph",
+      "sequence_index": 7
+    },
+    {
+      "alignment": "left",
+      "block_id": "pdf:aa1ef056169f:page:0397:block:0009",
+      "content": [
+        {
+          "language": "vi",
+          "semantic_line_break_after": false,
+          "source_typography": {
+            "caps_style": "normal",
+            "decorations": [],
+            "posture": "roman",
+            "vertical_position": "baseline",
+            "weight": "normal"
+          },
+          "span_id": "pdf:aa1ef056169f:page:0397:block:0009:span:0001",
+          "text": "– Mi tên Nga!"
+        }
+      ],
+      "dominant_language": "vi",
+      "heading_level_hint": null,
+      "heading_role_hint": "unknown",
+      "marker": null,
+      "region": null,
+      "role_hint": "paragraph",
+      "sequence_index": 8
+    },
+    {
+      "alignment": "justify",
+      "block_id": "pdf:aa1ef056169f:page:0397:block:0010",
+      "content": [
+        {
+          "language": "vi",
+          "semantic_line_break_after": false,
+          "source_typography": {
+            "caps_style": "normal",
+            "decorations": [],
+            "posture": "roman",
+            "vertical_position": "baseline",
+            "weight": "normal"
+          },
+          "span_id": "pdf:aa1ef056169f:page:0397:block:0010:span:0001",
+          "text": "Hic, xúc động không nói nên lời, ôm lấy cô (20 năm sau mới mạnh dạn ôm cô). Trong lâng lâng, nghe lời cô vằng vẳng:"
+        }
+      ],
+      "dominant_language": "vi",
+      "heading_level_hint": null,
+      "heading_role_hint": "unknown",
+      "marker": null,
+      "region": null,
+      "role_hint": "paragraph",
+      "sequence_index": 9
+    },
+    {
+      "alignment": "left",
+      "block_id": "pdf:aa1ef056169f:page:0397:block:0011",
+      "content": [
+        {
+          "language": "vi",
+          "semantic_line_break_after": false,
+          "source_typography": {
+            "caps_style": "normal",
+            "decorations": [],
+            "posture": "roman",
+            "vertical_position": "baseline",
+            "weight": "normal"
+          },
+          "span_id": "pdf:aa1ef056169f:page:0397:block:0011:span:0001",
+          "text": "– Ngày xưa mi toàn nói chuyện riêng…"
+        }
+      ],
+      "dominant_language": "vi",
+      "heading_level_hint": null,
+      "heading_role_hint": "unknown",
+      "marker": null,
+      "region": null,
+      "role_hint": "paragraph",
+      "sequence_index": 10
+    },
+    {
+      "alignment": "left",
+      "block_id": "pdf:aa1ef056169f:page:0397:block:0012",
+      "content": [
+        {
+          "language": "vi",
+          "semantic_line_break_after": false,
+          "source_typography": {
+            "caps_style": "normal",
+            "decorations": [],
+            "posture": "roman",
+            "vertical_position": "baseline",
+            "weight": "normal"
+          },
+          "span_id": "pdf:aa1ef056169f:page:0397:block:0012:span:0001",
+          "text": "Ô hô hô… hứt hứt…"
+        }
+      ],
+      "dominant_language": "vi",
+      "heading_level_hint": null,
+      "heading_role_hint": "unknown",
+      "marker": null,
+      "region": null,
+      "role_hint": "paragraph",
+      "sequence_index": 11
+    },
+    {
+      "alignment": "right",
+      "block_id": "pdf:aa1ef056169f:page:0397:block:0013",
+      "content": [
+        {
+          "language": "vi",
+          "semantic_line_break_after": false,
+          "source_typography": {
+            "caps_style": "normal",
+            "decorations": [],
+            "posture": "italic",
+            "vertical_position": "baseline",
+            "weight": "normal"
+          },
+          "span_id": "pdf:aa1ef056169f:page:0397:block:0013:span:0001",
+          "text": "Phần III: Mười tám năm kim cương"
+        }
+      ],
+      "dominant_language": "vi",
+      "heading_level_hint": null,
+      "heading_role_hint": "unknown",
+      "marker": null,
+      "region": null,
+      "role_hint": "page_footer",
+      "sequence_index": 12
+    },
+    {
+      "alignment": "right",
+      "block_id": "pdf:aa1ef056169f:page:0397:block:0014",
+      "content": [
+        {
+          "language": null,
+          "semantic_line_break_after": false,
+          "source_typography": {
+            "caps_style": "normal",
+            "decorations": [],
+            "posture": "italic",
+            "vertical_position": "baseline",
+            "weight": "normal"
+          },
+          "span_id": "pdf:aa1ef056169f:page:0397:block:0014:span:0001",
+          "text": "397"
+        }
+      ],
+      "dominant_language": null,
+      "heading_level_hint": null,
+      "heading_role_hint": "unknown",
+      "marker": null,
+      "region": null,
+      "role_hint": "page_number",
+      "sequence_index": 13
+    }
+  ],
+  "dominant_language": "vi",
+  "page_id": "pdf:aa1ef056169f:page:0397",
+  "page_kind_hint": "text",
+  "printed_page_number": "397",
+  "source": {
+    "media_type": "application/x.siftforge.pdf-page",
+    "metadata": {
+      "fixture_origin": "real-extraction-run",
+      "page_number": 397
+    },
+    "sha256": "751ce87aa97ce342c34872cff0e956844cd49ef33e50e998d07a0e329dfcb18b",
+    "source_id": "pdf:aa1ef056169f:page:0397",
+    "uri": "fixture://18-nam-kim-cuong/page/0397"
+  },
+  "warnings": []
+}

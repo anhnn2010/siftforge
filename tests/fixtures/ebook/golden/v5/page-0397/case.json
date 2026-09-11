@@ -1,0 +1,11 @@
+{
+  "case_id": "page-0397",
+  "model": "gemini-3.6-flash",
+  "prompt_version": "5",
+  "schema_version": "5",
+  "source_page_number": 397,
+  "tags": [
+    "dialogue",
+    "negative-list"
+  ]
+}
