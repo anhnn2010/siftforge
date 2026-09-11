@@ -74,6 +74,24 @@ _TYPOGRAPHY_KEYS = frozenset(
 )
 _MARKER_KEYS = frozenset({"kind", "raw_text", "ordinal"})
 _REGION_KEYS = frozenset({"x", "y", "width", "height"})
+_ARTIFACT_ROOT_KEYS = frozenset(
+    {
+        "page_id",
+        "source",
+        "page_kind_hint",
+        "dominant_language",
+        "printed_page_number",
+        "blocks",
+        "warnings",
+    }
+)
+_ARTIFACT_SOURCE_KEYS = frozenset(
+    {"source_id", "uri", "sha256", "media_type", "metadata"}
+)
+_ARTIFACT_BLOCK_KEYS = frozenset(
+    set(_BLOCK_KEYS) | {"block_id", "sequence_index"}
+)
+_ARTIFACT_SPAN_KEYS = frozenset(set(_SPAN_KEYS) | {"span_id"})
 _V5_BLOCK_ROLE_HINTS = frozenset(
     role for role in BlockRoleHint if role is not BlockRoleHint.LIST
 )
@@ -164,6 +182,137 @@ class EbookPageEvidenceNormalizer:
             "printed_page_number": page.printed_page_number,
             "blocks": [self._block_to_dict(block) for block in page.blocks],
             "warnings": list(page.warnings),
+        }
+
+    def from_dict(self, payload: Any) -> PageExtraction:
+        """Load and revalidate one canonical normalized page artifact.
+
+        Args:
+            payload: JSON-compatible data previously produced by ``to_dict``.
+
+        Returns:
+            Strict immutable page evidence reconstructed from the artifact.
+
+        Raises:
+            EbookPageNormalizationError: If normalized-only IDs, provenance,
+                ordering, or provider-facing fields are inconsistent.
+        """
+        artifact = self._require_dict(payload, "page artifact")
+        self._require_exact_keys(artifact, _ARTIFACT_ROOT_KEYS, "page artifact")
+        page_id = self._required_string(artifact.get("page_id"), "page.page_id")
+        source = self._source_from_artifact(artifact.get("source"))
+
+        raw_blocks = artifact.get("blocks")
+        if not isinstance(raw_blocks, list):
+            raise EbookPageNormalizationError("page.blocks must be a list")
+        provider_blocks = [
+            self._provider_block_from_artifact(page_id, block, index)
+            for index, block in enumerate(raw_blocks)
+        ]
+        provider_payload = {
+            "page_kind_hint": artifact.get("page_kind_hint"),
+            "dominant_language": artifact.get("dominant_language"),
+            "printed_page_number": artifact.get("printed_page_number"),
+            "blocks": provider_blocks,
+            "warnings": artifact.get("warnings"),
+        }
+        page = self.normalize(page_id, source, provider_payload)
+        if self.to_dict(page) != artifact:
+            raise EbookPageNormalizationError(
+                "normalized page artifact is not canonical"
+            )
+        return page
+
+    def _source_from_artifact(self, payload: Any) -> SourceRef:
+        """Parse source provenance embedded in a normalized page artifact."""
+        source = self._require_dict(payload, "page.source")
+        self._require_exact_keys(source, _ARTIFACT_SOURCE_KEYS, "page.source")
+        metadata = source.get("metadata")
+        if not isinstance(metadata, dict):
+            raise EbookPageNormalizationError("page.source.metadata must be an object")
+        return SourceRef(
+            source_id=self._required_string(
+                source.get("source_id"),
+                "page.source.source_id",
+            ),
+            uri=self._required_string(source.get("uri"), "page.source.uri"),
+            sha256=self._optional_string(
+                source.get("sha256"),
+                "page.source.sha256",
+            ),
+            media_type=self._optional_string(
+                source.get("media_type"),
+                "page.source.media_type",
+            ),
+            metadata=dict(metadata),
+        )
+
+    def _provider_block_from_artifact(
+        self,
+        page_id: str,
+        payload: Any,
+        block_index: int,
+    ) -> dict[str, Any]:
+        """Strip normalized IDs only after validating deterministic identity."""
+        path = f"page.blocks[{block_index}]"
+        block = self._require_dict(payload, path)
+        self._require_exact_keys(block, _ARTIFACT_BLOCK_KEYS, path)
+        expected_block_id = build_block_id(page_id, block_index)
+        if block.get("block_id") != expected_block_id:
+            raise EbookPageNormalizationError(
+                f"{path}.block_id must equal {expected_block_id!r}"
+            )
+        if block.get("sequence_index") != block_index:
+            raise EbookPageNormalizationError(
+                f"{path}.sequence_index must equal {block_index}"
+            )
+
+        content = block.get("content")
+        if not isinstance(content, list):
+            raise EbookPageNormalizationError(f"{path}.content must be a list")
+        provider_content = [
+            self._provider_span_from_artifact(
+                expected_block_id,
+                span,
+                path,
+                span_index,
+            )
+            for span_index, span in enumerate(content)
+        ]
+        return {
+            "role_hint": block.get("role_hint"),
+            "content": provider_content,
+            "dominant_language": block.get("dominant_language"),
+            "heading_level_hint": block.get("heading_level_hint"),
+            "heading_role_hint": block.get("heading_role_hint"),
+            "marker": block.get("marker"),
+            "region": block.get("region"),
+            "alignment": block.get("alignment"),
+        }
+
+    def _provider_span_from_artifact(
+        self,
+        block_id: str,
+        payload: Any,
+        block_path: str,
+        span_index: int,
+    ) -> dict[str, Any]:
+        """Strip one deterministic span ID from normalized evidence."""
+        path = f"{block_path}.content[{span_index}]"
+        span = self._require_dict(payload, path)
+        self._require_exact_keys(span, _ARTIFACT_SPAN_KEYS, path)
+        expected_span_id = build_span_id(block_id, span_index)
+        if span.get("span_id") != expected_span_id:
+            raise EbookPageNormalizationError(
+                f"{path}.span_id must equal {expected_span_id!r}"
+            )
+        return {
+            "text": span.get("text"),
+            "language": span.get("language"),
+            "source_typography": span.get("source_typography"),
+            "semantic_line_break_after": span.get(
+                "semantic_line_break_after"
+            ),
         }
 
     def _normalize_block(
@@ -456,6 +605,15 @@ class EbookPageEvidenceNormalizer:
             raise EbookPageNormalizationError(
                 f"{path} contains unsupported fields: {', '.join(extra)}"
             )
+
+    @staticmethod
+    def _required_string(value: Any, path: str) -> str:
+        """Validate a required non-empty string."""
+        if not isinstance(value, str) or not value:
+            raise EbookPageNormalizationError(
+                f"{path} must be a non-empty string"
+            )
+        return value
 
     @staticmethod
     def _optional_string(value: Any, path: str) -> str | None:

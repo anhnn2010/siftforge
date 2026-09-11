@@ -290,7 +290,10 @@ def test_cross_page_paragraph_continuation_is_retained_as_candidate() -> None:
             "page-0398",
             1,
             BlockRoleHint.PARAGRAPH,
-            "Trong thực tế tôi nhận ra rằng hầu như mọi người cha đều",
+            (
+                "Trong thực tế tôi nhận ra rằng hầu như "
+                "mọi người cha đều"
+            ),
         ),
     )
     second = _page(
@@ -1125,7 +1128,10 @@ def test_bilingual_adjacent_quotes_form_translation_candidate() -> None:
             "page-0271",
             2,
             BlockRoleHint.QUOTE,
-            "“Giáo dục là một hành động của tình yêu và trí tuệ.”",
+            (
+                "“Giáo dục là một hành động của tình yêu "
+                "và trí tuệ.”"
+            ),
             language="vi",
         ),
     )
@@ -1169,7 +1175,10 @@ def test_adjacent_attribution_strengthens_translation_candidate() -> None:
             "page-0271",
             3,
             BlockRoleHint.QUOTE,
-            "“Giáo dục là một hành động của tình yêu và trí tuệ.”",
+            (
+                "“Giáo dục là một hành động của tình yêu "
+                "và trí tuệ.”"
+            ),
             language="vi",
         ),
     )

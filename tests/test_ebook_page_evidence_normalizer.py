@@ -408,3 +408,26 @@ def test_normalizer_does_not_mutate_provider_payload() -> None:
     EbookPageEvidenceNormalizer().normalize("page-0152", _source(), payload)
 
     assert payload == before
+
+
+def test_v5_normalizer_round_trips_normalized_artifact() -> None:
+    """Canonical normalized JSON should load without losing deterministic IDs."""
+    normalizer = EbookPageEvidenceNormalizer()
+    page = normalizer.normalize("page-0152", _source(), _page_payload())
+    artifact = normalizer.to_dict(page)
+
+    loaded = normalizer.from_dict(artifact)
+
+    assert loaded == page
+    assert normalizer.to_dict(loaded) == artifact
+
+
+def test_v5_normalizer_rejects_modified_artifact_ids() -> None:
+    """Persisted block IDs must remain deterministic and tamper-evident."""
+    normalizer = EbookPageEvidenceNormalizer()
+    page = normalizer.normalize("page-0152", _source(), _page_payload())
+    artifact = normalizer.to_dict(page)
+    artifact["blocks"][0]["block_id"] = "wrong:block:id"
+
+    with pytest.raises(EbookPageNormalizationError, match="block_id must equal"):
+        normalizer.from_dict(artifact)

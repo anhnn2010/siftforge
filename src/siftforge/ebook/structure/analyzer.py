@@ -492,7 +492,10 @@ class BookStructuralAnalyzer:
         index = start + 1
         while index < len(positions):
             current_position = positions[index]
-            if current_position.page_index > positions[index - 1].page_index + 1:
+            previous_position = positions[index - 1]
+            if not _positions_are_same_or_consecutive(
+                previous_position, current_position
+            ):
                 break
             current = current_position.block
             if current.role_hint not in _LIST_ROLES:
@@ -773,6 +776,10 @@ class BookStructuralAnalyzer:
 
         candidates: list[DocumentRelationship] = []
         for page_index in range(len(pages) - 1):
+            if not _pages_are_consecutive(
+                pages[page_index], pages[page_index + 1]
+            ):
+                continue
             left_blocks = body_by_page[page_index]
             right_blocks = body_by_page[page_index + 1]
             if not left_blocks or not right_blocks:
@@ -794,6 +801,40 @@ class BookStructuralAnalyzer:
             if candidate is not None:
                 candidates.append(candidate)
         return tuple(candidates)
+
+
+def _positions_are_same_or_consecutive(
+    left: _EvidencePosition,
+    right: _EvidencePosition,
+) -> bool:
+    """Return whether evidence positions can belong to one cross-page run."""
+    if left.page_index == right.page_index:
+        return True
+    return _pages_are_consecutive(left.page, right.page)
+
+
+def _pages_are_consecutive(
+    left: PageExtraction,
+    right: PageExtraction,
+) -> bool:
+    """Require known consecutive physical pages before cross-page inference."""
+    left_number = _physical_page_number(left)
+    right_number = _physical_page_number(right)
+    if left_number is None or right_number is None:
+        return False
+    return right_number == left_number + 1
+
+
+def _physical_page_number(page: PageExtraction) -> int | None:
+    """Return the physical PDF page number from source provenance when known."""
+    value = page.source.metadata.get("page_number")
+    if isinstance(value, int) and not isinstance(value, bool) and value > 0:
+        return value
+    printed = page.printed_page_number
+    if printed is not None and printed.isascii() and printed.isdigit():
+        parsed = int(printed)
+        return parsed if parsed > 0 else None
+    return None
 
 
 _FOOTNOTE_LABEL_RE = re.compile(r"^(?:\d{1,3}|[A-Za-z]|[*†‡]+)$")

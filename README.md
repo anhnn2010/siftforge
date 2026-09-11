@@ -566,3 +566,57 @@ future provider / prompt / routing comparison
 The current report is deliberately feature-based rather than claiming OCR
 character accuracy. Exact OCR/CER/WER scoring requires a separate trusted text
 reference corpus; it should be added only when such ground truth is available.
+
+## Milestone 1G-1 - Multi-page book assembly and figure assets
+
+Milestone 1G-1 is the first provider-free step that consumes persisted v5 page
+runs and turns them into a logical multi-page book segment.
+
+```text
+page-* extraction runs
+        ↓
+canonical PageExtraction reload
+        ↓
+BookStructuralAnalyzer
+        ↓
+BookDocument
+        ↓
+figure region materialization
+        ↓
+structure/book.json + derived assets
+```
+
+Existing page runs can be assembled without calling Gemini again:
+
+```bash
+siftforge ebook assemble-book \
+  --runs-root runs/18-nam-kim-cuong \
+  --output runs/18-nam-kim-cuong-book
+```
+
+The assembler discovers direct child page-run directories, validates their
+normalized v5 evidence and deterministic IDs, orders them by physical PDF page
+number, and writes:
+
+```text
+runs/18-nam-kim-cuong-book/
+├── manifest.json
+├── structure/
+│   ├── book.json
+│   └── analysis.json
+└── assets/
+    └── figures/
+        └── figure-<stable-hash>.png
+```
+
+Figure crops use normalized image regions from page evidence. Derived figures
+are written as PNG so cropping does not add another lossy JPEG generation. The
+logical `ImageNode.asset_id` points to the resulting relative asset path.
+
+Cross-page structural inference now requires **known consecutive physical PDF
+pages**. A sparse test set such as pages 10 and 12 will not accidentally create
+continuations or one cross-page list merely because those runs happen to be
+adjacent in a directory listing.
+
+Physical pages remain provenance. The assembled `BookDocument` is the first
+artifact intended to become input to semantic cleanup and EPUB rendering.

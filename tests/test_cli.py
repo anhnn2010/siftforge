@@ -111,3 +111,21 @@ def test_cli_evaluate_golden_can_write_json_report(tmp_path: Path) -> None:
     assert exit_code == 0
     assert payload["passed"] is True
     assert payload["summary"]["cases_total"] == 9
+
+
+def test_assemble_book_parser_requires_runs_root_and_output() -> None:
+    """Book assembly should be exposed as a provider-free ebook CLI action."""
+    parser = build_parser()
+    args = parser.parse_args(
+        [
+            "ebook",
+            "assemble-book",
+            "--runs-root",
+            "runs/book",
+            "--output",
+            "runs/book-assembly",
+        ]
+    )
+
+    assert args.runs_root == Path("runs/book")
+    assert args.output == Path("runs/book-assembly")

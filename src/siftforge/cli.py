@@ -14,6 +14,8 @@ from siftforge.ebook.evaluation import (
 )
 from siftforge.ebook.extraction import EbookPageNormalizationError
 from siftforge.ebook.pipeline import (
+    EbookBookAssemblyError,
+    EbookBookAssemblyService,
     EbookPDFPageEvidenceExtractionService,
     EbookPDFPageExtractionService,
 )
@@ -73,6 +75,23 @@ def build_parser() -> argparse.ArgumentParser:
         help="Artifact directory. Defaults to runs/<pdf-stem>/page-NNNN.",
     )
 
+    assemble_book = ebook_actions.add_parser(
+        "assemble-book",
+        help="Assemble existing v5 page runs into logical book structure.",
+    )
+    assemble_book.add_argument(
+        "--runs-root",
+        required=True,
+        type=Path,
+        help="Directory containing page-* v5 extraction run directories.",
+    )
+    assemble_book.add_argument(
+        "--output",
+        required=True,
+        type=Path,
+        help="Assembly directory for structure and derived figure assets.",
+    )
+
     evaluate_golden = ebook_actions.add_parser(
         "evaluate-golden",
         help="Evaluate real-run ebook golden fixtures and report regressions.",
@@ -112,6 +131,8 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     if args.domain == "ebook" and args.action == "extract-page":
         return _run_ebook_extract_page(args)
+    if args.domain == "ebook" and args.action == "assemble-book":
+        return _run_ebook_assemble_book(args)
     if args.domain == "ebook" and args.action == "evaluate-golden":
         return _run_ebook_evaluate_golden(args)
 
@@ -219,6 +240,24 @@ def _run_ebook_extract_page_v4(
     print(f"kind:     {run.page_content.page_kind.value}")
     print(f"blocks:   {len(run.page_content.blocks)}")
     print("result: typed page content saved to normalized/page.json")
+    return 0
+
+
+def _run_ebook_assemble_book(args: argparse.Namespace) -> int:
+    """Assemble persisted page evidence into book-level logical structure."""
+    runs_root = args.runs_root.expanduser().resolve()
+    output = args.output.expanduser().resolve()
+    try:
+        run = EbookBookAssemblyService().assemble(runs_root, output)
+    except EbookBookAssemblyError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+
+    print(f"pages:    {len(run.page_runs)}")
+    print(f"nodes:    {len(run.document.nodes)}")
+    print(f"figures:  {len(run.figure_assets)}")
+    print(f"output:   {run.output_dir}")
+    print("result: logical book structure saved to structure/book.json")
     return 0
 
 
