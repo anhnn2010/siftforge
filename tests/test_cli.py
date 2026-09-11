@@ -1,5 +1,6 @@
 """Tests for local CLI configuration behavior."""
 
+import json
 from pathlib import Path
 
 import pytest
@@ -70,3 +71,43 @@ def test_extract_page_allows_explicit_v4_regression_contract() -> None:
     )
 
     assert args.contract_version == "4"
+
+
+def test_cli_evaluate_golden_text_report(capsys: pytest.CaptureFixture[str]) -> None:
+    """Golden evaluation should be runnable without provider credentials."""
+    exit_code = main(
+        [
+            "ebook",
+            "evaluate-golden",
+            "--fixtures",
+            "tests/fixtures/ebook/golden/v5",
+        ]
+    )
+
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert "result: PASS" in captured.out
+    assert "checks: 22/22 passed" in captured.out
+    assert captured.err == ""
+
+
+def test_cli_evaluate_golden_can_write_json_report(tmp_path: Path) -> None:
+    """CI can persist the machine-readable report as an artifact."""
+    output = tmp_path / "golden-report.json"
+    exit_code = main(
+        [
+            "ebook",
+            "evaluate-golden",
+            "--fixtures",
+            "tests/fixtures/ebook/golden/v5",
+            "--format",
+            "json",
+            "--output",
+            str(output),
+        ]
+    )
+
+    payload = json.loads(output.read_text(encoding="utf-8"))
+    assert exit_code == 0
+    assert payload["passed"] is True
+    assert payload["summary"]["cases_total"] == 9

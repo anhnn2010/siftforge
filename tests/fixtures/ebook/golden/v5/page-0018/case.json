@@ -8,5 +8,12 @@
     "mixed-language",
     "typography",
     "superscript"
-  ]
+  ],
+  "usage": {
+    "cached_content_token_count": null,
+    "candidates_token_count": 1673,
+    "prompt_token_count": 2693,
+    "thoughts_token_count": 2375,
+    "total_token_count": 6741
+  }
 }

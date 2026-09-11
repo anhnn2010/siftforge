@@ -8,5 +8,12 @@
     "figure",
     "image-region",
     "caption"
-  ]
+  ],
+  "usage": {
+    "cached_content_token_count": null,
+    "candidates_token_count": 662,
+    "prompt_token_count": 2351,
+    "thoughts_token_count": 1122,
+    "total_token_count": 4135
+  }
 }

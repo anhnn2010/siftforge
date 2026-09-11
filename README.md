@@ -504,3 +504,65 @@ making harmless internal refactors unnecessarily expensive.
 The current fixtures retain their actual extraction provenance: pages 18, 68,
 152, 398, 402, and 412 came from prompt 5.1, while pages 116, 378, and 397 came
 from prompt 5. All use schema v5 and `gemini-3.6-flash`.
+
+## Milestone 1F-9 - Golden evaluation and regression report
+
+Milestone 1F-9 turns the checked-in golden fixtures into a named evaluation
+surface that can be read by a developer or archived by CI. Pytest remains the
+hard regression gate, while the report explains *which capability* failed and
+reports the token usage of the real extraction runs behind the fixtures.
+
+Run the accepted v5 suite with:
+
+```bash
+siftforge ebook evaluate-golden \
+  --fixtures tests/fixtures/ebook/golden/v5
+```
+
+For a machine-readable CI artifact:
+
+```bash
+siftforge ebook evaluate-golden \
+  --fixtures tests/fixtures/ebook/golden/v5 \
+  --format json \
+  --output artifacts/golden-evaluation.json
+```
+
+The first report contains 22 named checks across nine real pages. Checks are
+grouped into stable quality dimensions such as language, typography, structure,
+marker handling, figure reconstruction, and semantic roles. A failed check
+returns a focused detail such as an unexpected heading role, verse break,
+figure count, or list interpretation rather than only a generic snapshot diff.
+
+Each `case.json` now also stores the provider token usage copied from the real
+run manifest. The evaluator aggregates prompt, candidate, thinking, total, and
+cached-content token counts. It intentionally does not convert token counts to
+currency yet: provider/model prices are external and time-varying, while token
+usage is stable provenance suitable for later cost comparison.
+
+The accepted fixture set currently totals:
+
+```text
+prompt tokens:     23,177
+candidate tokens:  19,379
+thinking tokens:   20,036
+total tokens:      62,592
+```
+
+This establishes the evaluation boundary needed for later A/B work:
+
+```text
+real extraction artifact
+        ↓
+strict golden fixture
+        ↓
+named quality checks + structural analysis
+        ↓
+quality report + token usage
+        ↓
+future provider / prompt / routing comparison
+```
+
+The current report is deliberately feature-based rather than claiming OCR
+character accuracy. Exact OCR/CER/WER scoring requires a separate trusted text
+reference corpus; it should be added only when such ground truth is available.

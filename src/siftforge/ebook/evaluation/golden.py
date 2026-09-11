@@ -27,6 +27,7 @@ _CASE_KEYS = frozenset(
         "schema_version",
         "source_page_number",
         "tags",
+        "usage",
     }
 )
 _ARTIFACT_KEYS = frozenset(
@@ -79,6 +80,17 @@ class GoldenFixtureError(ValueError):
 
 
 @dataclass(frozen=True, slots=True)
+class TokenUsage:
+    """Provider token usage captured from the real extraction run."""
+
+    prompt_token_count: int
+    candidates_token_count: int
+    thoughts_token_count: int
+    total_token_count: int
+    cached_content_token_count: int | None = None
+
+
+@dataclass(frozen=True, slots=True)
 class _GoldenCaseMetadata:
     """Validated metadata stored beside one golden page artifact."""
 
@@ -88,6 +100,7 @@ class _GoldenCaseMetadata:
     schema_version: str
     source_page_number: int
     tags: tuple[str, ...]
+    usage: TokenUsage
 
 
 @dataclass(frozen=True, slots=True)
@@ -100,6 +113,7 @@ class GoldenPageFixture:
     schema_version: str
     source_page_number: int
     tags: tuple[str, ...]
+    usage: TokenUsage
     page: PageExtraction
 
 
@@ -140,6 +154,7 @@ class GoldenPageFixtureLoader:
             schema_version=fixture.schema_version,
             source_page_number=fixture.source_page_number,
             tags=fixture.tags,
+            usage=fixture.usage,
             page=page,
         )
 
@@ -176,6 +191,7 @@ class GoldenPageFixtureLoader:
             isinstance(tag, str) and tag for tag in raw_tags
         ):
             raise GoldenFixtureError("case.tags must be a list of non-empty strings")
+        usage = self._token_usage(payload.get("usage"))
         return _GoldenCaseMetadata(
             case_id=case_id,
             model=model,
@@ -183,6 +199,43 @@ class GoldenPageFixtureLoader:
             schema_version=schema_version,
             source_page_number=source_page_number,
             tags=tuple(raw_tags),
+            usage=usage,
+        )
+
+    def _token_usage(self, payload: Any) -> TokenUsage:
+        """Validate token usage copied from the source run manifest."""
+        usage = self._require_mapping(payload, "case.usage")
+        expected = frozenset(
+            {
+                "cached_content_token_count",
+                "candidates_token_count",
+                "prompt_token_count",
+                "thoughts_token_count",
+                "total_token_count",
+            }
+        )
+        self._require_exact_keys(usage, expected, "case.usage")
+        return TokenUsage(
+            prompt_token_count=self._nonnegative_int(
+                usage.get("prompt_token_count"),
+                "case.usage.prompt_token_count",
+            ),
+            candidates_token_count=self._nonnegative_int(
+                usage.get("candidates_token_count"),
+                "case.usage.candidates_token_count",
+            ),
+            thoughts_token_count=self._nonnegative_int(
+                usage.get("thoughts_token_count"),
+                "case.usage.thoughts_token_count",
+            ),
+            total_token_count=self._nonnegative_int(
+                usage.get("total_token_count"),
+                "case.usage.total_token_count",
+            ),
+            cached_content_token_count=self._optional_nonnegative_int(
+                usage.get("cached_content_token_count"),
+                "case.usage.cached_content_token_count",
+            ),
         )
 
     def _page_from_artifact(self, payload: Mapping[str, Any]) -> PageExtraction:
@@ -331,6 +384,18 @@ class GoldenPageFixtureLoader:
         if not isinstance(payload, str) or not payload:
             raise GoldenFixtureError(f"{path} must be a non-empty string")
         return payload
+
+    def _nonnegative_int(self, payload: Any, path: str) -> int:
+        """Return one required non-negative integer."""
+        if isinstance(payload, bool) or not isinstance(payload, int) or payload < 0:
+            raise GoldenFixtureError(f"{path} must be a non-negative integer")
+        return payload
+
+    def _optional_nonnegative_int(self, payload: Any, path: str) -> int | None:
+        """Return one optional non-negative integer."""
+        if payload is None:
+            return None
+        return self._nonnegative_int(payload, path)
 
     def _optional_string(self, payload: Any, path: str) -> str | None:
         """Return one optional string field."""

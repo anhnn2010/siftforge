@@ -7,5 +7,12 @@
   "tags": [
     "ordered-list",
     "list-recovery"
-  ]
+  ],
+  "usage": {
+    "cached_content_token_count": null,
+    "candidates_token_count": 2593,
+    "prompt_token_count": 2351,
+    "thoughts_token_count": 2054,
+    "total_token_count": 6998
+  }
 }

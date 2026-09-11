@@ -8,6 +8,10 @@ import sys
 from collections.abc import Sequence
 from pathlib import Path
 
+from siftforge.ebook.evaluation import (
+    GoldenFixtureError,
+    GoldenRegressionEvaluator,
+)
 from siftforge.ebook.extraction import EbookPageNormalizationError
 from siftforge.ebook.pipeline import (
     EbookPDFPageEvidenceExtractionService,
@@ -68,6 +72,29 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Artifact directory. Defaults to runs/<pdf-stem>/page-NNNN.",
     )
+
+    evaluate_golden = ebook_actions.add_parser(
+        "evaluate-golden",
+        help="Evaluate real-run ebook golden fixtures and report regressions.",
+    )
+    evaluate_golden.add_argument(
+        "--fixtures",
+        required=True,
+        type=Path,
+        help="Golden fixture root containing page-* directories.",
+    )
+    evaluate_golden.add_argument(
+        "--format",
+        choices=("text", "json"),
+        default="text",
+        help="Report format. Defaults to compact text.",
+    )
+    evaluate_golden.add_argument(
+        "--output",
+        type=Path,
+        default=None,
+        help="Optional report file. Without it, print to stdout.",
+    )
     return parser
 
 
@@ -85,6 +112,8 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     if args.domain == "ebook" and args.action == "extract-page":
         return _run_ebook_extract_page(args)
+    if args.domain == "ebook" and args.action == "evaluate-golden":
+        return _run_ebook_evaluate_golden(args)
 
     parser.error("unsupported command")
     return 2
@@ -191,6 +220,34 @@ def _run_ebook_extract_page_v4(
     print(f"blocks:   {len(run.page_content.blocks)}")
     print("result: typed page content saved to normalized/page.json")
     return 0
+
+
+def _run_ebook_evaluate_golden(args: argparse.Namespace) -> int:
+    """Evaluate golden fixtures and emit a human or machine-readable report."""
+    fixture_root = args.fixtures.expanduser().resolve()
+    if not fixture_root.is_dir():
+        print(
+            f"error: fixture root is not a directory: {fixture_root}",
+            file=sys.stderr,
+        )
+        return 2
+
+    try:
+        report = GoldenRegressionEvaluator().evaluate_root(fixture_root)
+    except GoldenFixtureError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+
+    rendered = report.to_json() if args.format == "json" else report.to_text()
+    if args.output is None:
+        print(rendered, end="")
+    else:
+        output = args.output.expanduser().resolve()
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_text(rendered, encoding="utf-8")
+        print(f"report: {output}")
+
+    return 0 if report.passed else 1
 
 
 if __name__ == "__main__":

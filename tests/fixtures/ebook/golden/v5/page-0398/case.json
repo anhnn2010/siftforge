@@ -8,5 +8,12 @@
     "typography",
     "dialogue",
     "transition"
-  ]
+  ],
+  "usage": {
+    "cached_content_token_count": null,
+    "candidates_token_count": 3130,
+    "prompt_token_count": 2676,
+    "thoughts_token_count": 1741,
+    "total_token_count": 7547
+  }
 }
