@@ -17,6 +17,8 @@ from siftforge.ebook.structure import (
     RelationshipKind,
     SemanticMark,
     SourceFragment,
+    book_document_from_dict,
+    book_document_to_dict,
 )
 
 
@@ -100,3 +102,32 @@ def test_book_document_can_retain_unresolved_relationship_evidence() -> None:
 
     assert document.relationships[0].kind is RelationshipKind.CONTINUES_TO
     assert document.relationships[0].confidence == 0.95
+
+
+def test_book_document_json_round_trip_preserves_structure() -> None:
+    """Persisted assembly structure should reload without semantic drift."""
+    document = BookDocument(
+        nodes=(
+            HeadingNode(
+                node_id="heading-1",
+                spans=(),
+                role=HeadingRole.SECTION_TITLE,
+                level=2,
+            ),
+        ),
+        relationships=(
+            DocumentRelationship(
+                relationship_id="relationship-1",
+                kind=RelationshipKind.TRANSLATION_OF,
+                source_id="quote-vi",
+                target_id="quote-en",
+                confidence=0.8,
+                reasons=("adjacent multilingual quotations",),
+            ),
+        ),
+    )
+
+    payload = book_document_to_dict(document)
+    restored = book_document_from_dict(payload)
+
+    assert restored == document

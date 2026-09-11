@@ -32,8 +32,7 @@ from .models import (
     VerseLineNode,
     VerseNode,
 )
-
-from .serialization import book_document_to_dict
+from .serialization import book_document_from_dict, book_document_to_dict
 
 __all__: list[str] = [
     "StructuralAnalysisResult",
@@ -64,5 +63,6 @@ __all__: list[str] = [
     "SourceFragment",
     "VerseLineNode",
     "VerseNode",
+    "book_document_from_dict",
     "book_document_to_dict",
 ]

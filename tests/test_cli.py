@@ -129,3 +129,30 @@ def test_assemble_book_parser_requires_runs_root_and_output() -> None:
 
     assert args.runs_root == Path("runs/book")
     assert args.output == Path("runs/book-assembly")
+
+
+def test_render_xhtml_parser_accepts_assembly_metadata() -> None:
+    """EPUB-ready XHTML should be exposed as a provider-free CLI action."""
+    parser = build_parser()
+    args = parser.parse_args(
+        [
+            "ebook",
+            "render-xhtml",
+            "--assembly",
+            "runs/book-assembly",
+            "--output",
+            "runs/book-xhtml",
+            "--title",
+            "18 Năm Kim Cương",
+            "--language",
+            "vi",
+            "--author",
+            "Hồ Thị Hải Âu",
+        ]
+    )
+
+    assert args.assembly == Path("runs/book-assembly")
+    assert args.output == Path("runs/book-xhtml")
+    assert args.title == "18 Năm Kim Cương"
+    assert args.language == "vi"
+    assert args.author == "Hồ Thị Hải Âu"

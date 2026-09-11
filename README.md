@@ -620,3 +620,90 @@ adjacent in a directory listing.
 
 Physical pages remain provenance. The assembled `BookDocument` is the first
 artifact intended to become input to semantic cleanup and EPUB rendering.
+
+## Milestone 1G-2 - EPUB-ready semantic projection and XHTML skeleton
+
+Milestone 1G-2 introduces the boundary between logical book structure and
+renderable EPUB semantics. The renderer no longer consumes page evidence or
+source typography directly:
+
+```text
+BookDocument
+        ↓
+EbookSemanticProjector
+        ↓
+SemanticBookDocument
+        ↓
+EpubReadyXhtmlRenderer
+        ↓
+semantic/document.json
+text/content.xhtml
+styles/book.css
+assets/figures/*
+```
+
+An existing 1G-1 assembly can be rendered without Gemini or any other provider:
+
+```bash
+siftforge ebook render-xhtml \
+  --assembly runs/18-nam-kim-cuong-book \
+  --output runs/18-nam-kim-cuong-xhtml \
+  --title "18 Năm Kim Cương" \
+  --language vi
+```
+
+The output is intentionally **EPUB-ready XHTML**, not a `.epub` archive yet:
+
+```text
+runs/18-nam-kim-cuong-xhtml/
+├── manifest.json
+├── semantic/
+│   └── document.json
+├── text/
+│   └── content.xhtml
+├── styles/
+│   └── book.css
+└── assets/
+    └── figures/
+        └── figure-*.png
+```
+
+The semantic projector deliberately drops source typography as a rendering
+instruction. Italic source glyphs do not become `<em>` and bold glyphs do not
+become `<strong>` unless a prior semantic pass has explicitly populated
+`SemanticMark`. This preserves the conclusion from real pages 162 and 348:
+visual source typography and semantic emphasis are separate concepts.
+
+The projection currently maps explicit logical structure into XHTML-safe
+semantics:
+
+- paragraphs become `<p>`;
+- resolved headings become `<h1>` through `<h6>`;
+- labels such as `scenario_label`, `subtitle`, and `genre_label` remain
+  non-hierarchical paragraph-like labels;
+- ordered lists preserve structural ordinals, including `start="10"`, without
+  putting source marker text into readable content;
+- verse retains explicit semantic line elements;
+- quotations become `<blockquote>`;
+- figures use the materialized 1G-1 assets with `<figure>` and `<figcaption>`;
+- inset content becomes `<aside>` with a role-specific class;
+- footnote relationships become `epub:type="noteref"` links and footnote
+  bodies use `epub:type="footnote"`;
+- attribution and translation relationships remain in semantic JSON for later
+  packaging/navigation logic rather than being invented as non-standard EPUB
+  behavior.
+
+`structure/book.json` now has a canonical loader as well as a serializer, so a
+persisted assembly can be reused by later stages without repeating structural
+analysis. The loader preserves source provenance, semantic relationships,
+figure regions, materialized asset IDs, and explicit semantic marks.
+
+The XHTML stage copies only referenced assets and rejects absolute paths or
+path traversal. It also leaves unresolved `CONTINUES_TO` relationships as
+warnings rather than silently merging content during rendering. Continuation
+resolution remains a structural/semantic responsibility, not renderer magic.
+
+This milestone deliberately does not yet create `mimetype`, `META-INF`, OPF,
+navigation documents, or the final ZIP container. Those packaging concerns are
+reserved for the next EPUB milestone after the semantic XHTML surface is
+stable.

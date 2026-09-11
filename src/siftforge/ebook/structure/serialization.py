@@ -2,9 +2,22 @@
 
 from __future__ import annotations
 
+import math
 from typing import Any
 
-from siftforge.ebook.evidence import MarkerEvidence, NormalizedRegion, SourceTypography
+from siftforge.ebook.evidence import (
+    MarkerEvidence,
+    MarkerKind,
+    NormalizedRegion,
+    SourceTypography,
+)
+from siftforge.ebook.models import (
+    CapsStyle,
+    FontPosture,
+    FontWeight,
+    TextDecoration,
+    VerticalPosition,
+)
 
 from .models import (
     AttributionNode,
@@ -16,12 +29,17 @@ from .models import (
     FlowNode,
     FootnoteNode,
     HeadingNode,
+    HeadingRole,
     ImageNode,
     InsetNode,
+    InsetRole,
     ListItemNode,
+    ListKind,
     ListNode,
     ParagraphNode,
     QuotationNode,
+    RelationshipKind,
+    SemanticMark,
     SourceFragment,
     VerseLineNode,
     VerseNode,
@@ -232,3 +250,325 @@ def _relationship_to_dict(
         "confidence": relationship.confidence,
         "reasons": list(relationship.reasons),
     }
+
+
+def book_document_from_dict(payload: dict[str, Any]) -> BookDocument:
+    """Deserialize one canonical ``BookDocument`` JSON object.
+
+    This loader is intended for SiftForge's own persisted assembly artifacts.
+    It validates explicit type discriminators and enum values while preserving
+    all semantic relationships and source provenance.
+    """
+    nodes_value = _required_list(payload, "nodes")
+    relationships_value = _required_list(payload, "relationships")
+    return BookDocument(
+        nodes=tuple(_node_from_dict(_required_dict(value)) for value in nodes_value),
+        relationships=tuple(
+            _relationship_from_dict(_required_dict(value))
+            for value in relationships_value
+        ),
+    )
+
+
+def _node_from_dict(payload: dict[str, Any]) -> FlowNode:
+    """Deserialize one canonical structural flow node."""
+    node_type = _required_str(payload, "type")
+    node_id = _required_str(payload, "node_id")
+    provenance = _fragments_from_value(payload.get("provenance", []))
+    if node_type == "paragraph":
+        return ParagraphNode(
+            node_id=node_id,
+            spans=_spans_from_value(payload.get("spans", [])),
+            provenance=provenance,
+        )
+    if node_type == "heading":
+        return HeadingNode(
+            node_id=node_id,
+            spans=_spans_from_value(payload.get("spans", [])),
+            role=HeadingRole(_required_str(payload, "role")),
+            level=_optional_int(payload.get("level")),
+            provenance=provenance,
+        )
+    if node_type == "footnote":
+        return FootnoteNode(
+            node_id=node_id,
+            spans=_spans_from_value(payload.get("spans", [])),
+            label=_optional_str(payload.get("label")),
+            provenance=provenance,
+        )
+    if node_type == "attribution":
+        return AttributionNode(
+            node_id=node_id,
+            spans=_spans_from_value(payload.get("spans", [])),
+            provenance=provenance,
+        )
+    if node_type == "list":
+        return ListNode(
+            node_id=node_id,
+            kind=ListKind(_required_str(payload, "kind")),
+            items=tuple(
+                _list_item_from_dict(_required_dict(value))
+                for value in _required_list(payload, "items")
+            ),
+            provenance=provenance,
+        )
+    if node_type == "verse":
+        return VerseNode(
+            node_id=node_id,
+            lines=tuple(
+                _verse_line_from_dict(_required_dict(value))
+                for value in _required_list(payload, "lines")
+            ),
+            provenance=provenance,
+        )
+    if node_type == "quotation":
+        return QuotationNode(
+            node_id=node_id,
+            children=tuple(
+                _node_from_dict(_required_dict(value))
+                for value in _required_list(payload, "children")
+            ),
+            provenance=provenance,
+        )
+    if node_type == "figure":
+        return _figure_from_dict(payload, provenance)
+    if node_type == "inset":
+        return InsetNode(
+            node_id=node_id,
+            role=InsetRole(_required_str(payload, "role")),
+            children=tuple(
+                _node_from_dict(_required_dict(value))
+                for value in _required_list(payload, "children")
+            ),
+            provenance=provenance,
+        )
+    raise ValueError(f"unsupported structural node type: {node_type!r}")
+
+
+def _list_item_from_dict(payload: dict[str, Any]) -> ListItemNode:
+    """Deserialize one list item."""
+    marker_value = payload.get("marker")
+    return ListItemNode(
+        node_id=_required_str(payload, "node_id"),
+        spans=_spans_from_value(payload.get("spans", [])),
+        marker=(
+            _marker_from_dict(_required_dict(marker_value))
+            if marker_value is not None
+            else None
+        ),
+        ordinal=_optional_int(payload.get("ordinal")),
+        provenance=_fragments_from_value(payload.get("provenance", [])),
+    )
+
+
+def _verse_line_from_dict(payload: dict[str, Any]) -> VerseLineNode:
+    """Deserialize one semantic verse line."""
+    return VerseLineNode(
+        node_id=_required_str(payload, "node_id"),
+        spans=_spans_from_value(payload.get("spans", [])),
+        provenance=_fragments_from_value(payload.get("provenance", [])),
+    )
+
+
+def _figure_from_dict(
+    payload: dict[str, Any],
+    provenance: tuple[SourceFragment, ...],
+) -> FigureNode:
+    """Deserialize one figure with source region and optional caption."""
+    image = _image_from_dict(_required_dict(payload.get("image")))
+    caption_value = payload.get("caption")
+    caption = (
+        _caption_from_dict(_required_dict(caption_value))
+        if caption_value is not None
+        else None
+    )
+    return FigureNode(
+        node_id=_required_str(payload, "node_id"),
+        image=image,
+        caption=caption,
+        provenance=provenance,
+    )
+
+
+def _image_from_dict(payload: dict[str, Any]) -> ImageNode:
+    """Deserialize one source-backed logical image."""
+    region = _required_dict(payload.get("source_region"))
+    return ImageNode(
+        node_id=_required_str(payload, "node_id"),
+        source_region=NormalizedRegion(
+            x=_required_number(region, "x"),
+            y=_required_number(region, "y"),
+            width=_required_number(region, "width"),
+            height=_required_number(region, "height"),
+        ),
+        asset_id=_optional_str(payload.get("asset_id")),
+        provenance=_fragments_from_value(payload.get("provenance", [])),
+    )
+
+
+def _caption_from_dict(payload: dict[str, Any]) -> CaptionNode:
+    """Deserialize one figure caption."""
+    return CaptionNode(
+        node_id=_required_str(payload, "node_id"),
+        spans=_spans_from_value(payload.get("spans", [])),
+        provenance=_fragments_from_value(payload.get("provenance", [])),
+    )
+
+
+def _spans_from_value(value: Any) -> tuple[DocumentTextSpan, ...]:
+    """Deserialize canonical logical text spans."""
+    return tuple(
+        _span_from_dict(_required_dict(item))
+        for item in _required_list_value(value)
+    )
+
+
+def _span_from_dict(payload: dict[str, Any]) -> DocumentTextSpan:
+    """Deserialize one logical text span and its explicit semantic marks."""
+    typography = _required_dict(payload.get("source_typography"))
+    return DocumentTextSpan(
+        span_id=_required_str(payload, "span_id"),
+        text=_required_str_allow_empty(payload, "text"),
+        language=_optional_str(payload.get("language")),
+        source_typography=SourceTypography(
+            posture=FontPosture(_required_str(typography, "posture")),
+            weight=FontWeight(_required_str(typography, "weight")),
+            vertical_position=VerticalPosition(
+                _required_str(typography, "vertical_position")
+            ),
+            caps_style=CapsStyle(_required_str(typography, "caps_style")),
+            decorations=tuple(
+                TextDecoration(_required_string_value(item))
+                for item in _required_list(typography, "decorations")
+            ),
+        ),
+        semantic_marks=tuple(
+            SemanticMark(_required_string_value(item))
+            for item in _required_list(payload, "semantic_marks")
+        ),
+        provenance=_fragments_from_value(payload.get("provenance", [])),
+    )
+
+
+def _marker_from_dict(payload: dict[str, Any]) -> MarkerEvidence:
+    """Deserialize source marker evidence."""
+    return MarkerEvidence(
+        kind=MarkerKind(_required_str(payload, "kind")),
+        raw_text=_optional_str(payload.get("raw_text")),
+        ordinal=_optional_int(payload.get("ordinal")),
+    )
+
+
+def _fragments_from_value(value: Any) -> tuple[SourceFragment, ...]:
+    """Deserialize source-lineage fragments."""
+    return tuple(
+        SourceFragment(
+            page_id=_required_str(payload, "page_id"),
+            block_id=_required_str(payload, "block_id"),
+            span_ids=tuple(
+                _required_string_value(item)
+                for item in _required_list(payload, "span_ids")
+            ),
+        )
+        for payload in (
+            _required_dict(item) for item in _required_list_value(value)
+        )
+    )
+
+
+def _relationship_from_dict(payload: dict[str, Any]) -> DocumentRelationship:
+    """Deserialize one semantic or continuation relationship."""
+    confidence = payload.get("confidence")
+    if confidence is not None:
+        confidence = _required_number_value(confidence)
+    return DocumentRelationship(
+        relationship_id=_required_str(payload, "relationship_id"),
+        kind=RelationshipKind(_required_str(payload, "kind")),
+        source_id=_required_str(payload, "source_id"),
+        target_id=_required_str(payload, "target_id"),
+        confidence=confidence,
+        reasons=tuple(
+            _required_string_value(item)
+            for item in _required_list(payload, "reasons")
+        ),
+    )
+
+
+def _required_dict(value: Any) -> dict[str, Any]:
+    """Return one JSON object or raise a stable validation error."""
+    if not isinstance(value, dict):
+        raise ValueError("expected JSON object")
+    return value
+
+
+def _required_list(payload: dict[str, Any], key: str) -> list[Any]:
+    """Return one required JSON list field."""
+    if key not in payload:
+        raise ValueError(f"missing required field: {key}")
+    return _required_list_value(payload[key])
+
+
+def _required_list_value(value: Any) -> list[Any]:
+    """Return one JSON list value."""
+    if not isinstance(value, list):
+        raise ValueError("expected JSON array")
+    return value
+
+
+def _required_str(payload: dict[str, Any], key: str) -> str:
+    """Return one required non-empty string field."""
+    if key not in payload:
+        raise ValueError(f"missing required field: {key}")
+    value = payload[key]
+    if not isinstance(value, str) or not value:
+        raise ValueError(f"{key} must be a non-empty string")
+    return value
+
+
+def _required_str_allow_empty(payload: dict[str, Any], key: str) -> str:
+    """Return one required string field that may be empty."""
+    if key not in payload or not isinstance(payload[key], str):
+        raise ValueError(f"{key} must be a string")
+    return payload[key]
+
+
+def _required_string_value(value: Any) -> str:
+    """Return a list element only when it is a string."""
+    if not isinstance(value, str):
+        raise ValueError("expected string value")
+    return value
+
+
+def _optional_str(value: Any) -> str | None:
+    """Validate an optional string field."""
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        raise ValueError("expected optional string")
+    return value
+
+
+def _optional_int(value: Any) -> int | None:
+    """Validate an optional integer without accepting booleans."""
+    if value is None:
+        return None
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise ValueError("expected optional integer")
+    return value
+
+
+def _required_number(payload: dict[str, Any], key: str) -> float:
+    """Return one required finite JSON number as float."""
+    if key not in payload:
+        raise ValueError(f"missing required field: {key}")
+    return _required_number_value(payload[key])
+
+
+def _required_number_value(value: Any) -> float:
+    """Validate a finite number without accepting booleans."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise ValueError("expected JSON number")
+    result = float(value)
+    if not math.isfinite(result):
+        raise ValueError("expected finite JSON number")
+    return result

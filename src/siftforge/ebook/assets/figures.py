@@ -190,10 +190,10 @@ def _pixel_box(
     *, width: int, height: int, region: NormalizedRegion
 ) -> tuple[int, int, int, int]:
     """Convert a normalized source region into a clamped Pillow crop box."""
-    x = getattr(region, "x")
-    y = getattr(region, "y")
-    region_width = getattr(region, "width")
-    region_height = getattr(region, "height")
+    x = region.x
+    y = region.y
+    region_width = region.width
+    region_height = region.height
 
     left = max(0, min(width - 1, math.floor(x * width)))
     top = max(0, min(height - 1, math.floor(y * height)))

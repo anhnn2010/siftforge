@@ -16,6 +16,8 @@ from siftforge.ebook.extraction import EbookPageNormalizationError
 from siftforge.ebook.pipeline import (
     EbookBookAssemblyError,
     EbookBookAssemblyService,
+    EbookEpubReadyError,
+    EbookEpubReadyService,
     EbookPDFPageEvidenceExtractionService,
     EbookPDFPageExtractionService,
 )
@@ -92,6 +94,38 @@ def build_parser() -> argparse.ArgumentParser:
         help="Assembly directory for structure and derived figure assets.",
     )
 
+    render_xhtml = ebook_actions.add_parser(
+        "render-xhtml",
+        help="Render an assembled BookDocument as EPUB-ready XHTML.",
+    )
+    render_xhtml.add_argument(
+        "--assembly",
+        required=True,
+        type=Path,
+        help="Book assembly directory containing structure/book.json.",
+    )
+    render_xhtml.add_argument(
+        "--output",
+        required=True,
+        type=Path,
+        help="Output directory for semantic XHTML, CSS, and assets.",
+    )
+    render_xhtml.add_argument(
+        "--title",
+        required=True,
+        help="Book title used by the semantic XHTML document.",
+    )
+    render_xhtml.add_argument(
+        "--language",
+        default=None,
+        help="Optional BCP 47 book language, for example vi or en.",
+    )
+    render_xhtml.add_argument(
+        "--author",
+        default=None,
+        help="Optional book author metadata.",
+    )
+
     evaluate_golden = ebook_actions.add_parser(
         "evaluate-golden",
         help="Evaluate real-run ebook golden fixtures and report regressions.",
@@ -133,6 +167,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _run_ebook_extract_page(args)
     if args.domain == "ebook" and args.action == "assemble-book":
         return _run_ebook_assemble_book(args)
+    if args.domain == "ebook" and args.action == "render-xhtml":
+        return _run_ebook_render_xhtml(args)
     if args.domain == "ebook" and args.action == "evaluate-golden":
         return _run_ebook_evaluate_golden(args)
 
@@ -258,6 +294,30 @@ def _run_ebook_assemble_book(args: argparse.Namespace) -> int:
     print(f"figures:  {len(run.figure_assets)}")
     print(f"output:   {run.output_dir}")
     print("result: logical book structure saved to structure/book.json")
+    return 0
+
+
+def _run_ebook_render_xhtml(args: argparse.Namespace) -> int:
+    """Render one persisted book assembly into EPUB-ready XHTML artifacts."""
+    assembly = args.assembly.expanduser().resolve()
+    output = args.output.expanduser().resolve()
+    try:
+        run = EbookEpubReadyService().build(
+            assembly,
+            output,
+            title=args.title,
+            language=args.language,
+            author=args.author,
+        )
+    except EbookEpubReadyError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+
+    print(f"nodes:    {len(run.document.nodes)}")
+    print(f"assets:   {len(run.render.copied_assets)}")
+    print(f"warnings: {len(run.warnings)}")
+    print(f"output:   {run.output_dir}")
+    print("result: EPUB-ready XHTML saved to text/content.xhtml")
     return 0
 
 
