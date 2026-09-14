@@ -8,6 +8,7 @@ from siftforge.ebook.semantic import (
     SemanticBookDocument,
     SemanticFigure,
     SemanticFootnote,
+    SemanticHeading,
     SemanticInline,
     SemanticList,
     SemanticListItem,
@@ -15,7 +16,7 @@ from siftforge.ebook.semantic import (
     SemanticVerse,
     SemanticVerseLine,
 )
-from siftforge.ebook.structure import ListKind, SemanticMark
+from siftforge.ebook.structure import HeadingRole, ListKind, SemanticMark
 
 
 def _inline(text: str, **kwargs: object) -> SemanticInline:
@@ -192,6 +193,73 @@ def test_renderer_links_footnote_reference_to_footnote_body(tmp_path: Path) -> N
     assert 'href="#note-1"' in xhtml
     assert 'epub:type="footnote"' in xhtml
 
+
+
+def test_renderer_keeps_heading_footnote_reference_clickable(tmp_path: Path) -> None:
+    """Body headings should retain clickable noteref markup after TOC cleanup."""
+    document = SemanticBookDocument(
+        title="Book",
+        language="vi",
+        author=None,
+        nodes=(
+            SemanticHeading(
+                node_id="heading-1",
+                content=(
+                    _inline("Rối loạn phát triển"),
+                    _inline(
+                        "1",
+                        role=InlineRole.FOOTNOTE_REF,
+                        target_id="note-1",
+                        source_span_id="span-ref-1",
+                    ),
+                ),
+                role=HeadingRole.SECTION_TITLE,
+                level=2,
+            ),
+            SemanticFootnote(
+                node_id="note-1",
+                content=(_inline("Nội dung chú thích"),),
+                label="1",
+            ),
+        ),
+    )
+
+    result = EpubReadyXhtmlRenderer().render(
+        document,
+        asset_root=tmp_path,
+        output_root=tmp_path / "out",
+    )
+    xhtml = result.content_path.read_text(encoding="utf-8")
+
+    assert '<h2 id="heading-1" class="role-section-title">' in xhtml
+    assert 'epub:type="noteref"' in xhtml
+    assert 'href="#note-1"' in xhtml
+
+
+def test_renderer_outputs_footnote_label_once(tmp_path: Path) -> None:
+    """A semantic footnote should render its structural label exactly once."""
+    document = SemanticBookDocument(
+        title="Book",
+        language="vi",
+        author=None,
+        nodes=(
+            SemanticFootnote(
+                node_id="note-1",
+                content=(_inline(" Hiện tượng được giải thích."),),
+                label="1",
+            ),
+        ),
+    )
+
+    result = EpubReadyXhtmlRenderer().render(
+        document,
+        asset_root=tmp_path,
+        output_root=tmp_path / "out",
+    )
+    xhtml = result.content_path.read_text(encoding="utf-8")
+
+    assert xhtml.count('class="footnote-label">1</span>') == 1
+    assert ">1 1 Hiện tượng" not in xhtml
 
 def test_renderer_copies_figure_assets(tmp_path: Path) -> None:
     """Referenced figure assets should be copied with stable relative paths."""

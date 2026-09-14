@@ -295,7 +295,7 @@ def _collect_heading_nodes(
             content = node.get("content")
             if not isinstance(node_id, str) or not node_id:
                 raise EpubPackageError("semantic heading has invalid node_id")
-            label = _semantic_inline_text(content).strip()
+            label = _semantic_navigation_text(content).strip()
             if label:
                 entries.append(EpubTocEntry(label=label, target_id=node_id))
         children = node.get("children")
@@ -307,19 +307,42 @@ def _collect_heading_nodes(
             _collect_heading_nodes(children, entries)
 
 
-def _semantic_inline_text(value: Any) -> str:
-    """Flatten serialized semantic inline content into human-readable text."""
+def _semantic_navigation_text(value: Any) -> str:
+    """Flatten heading text for navigation while omitting footnote references."""
     if not isinstance(value, list):
         raise EpubPackageError("semantic text content must be a list")
     parts: list[str] = []
+    omitted_reference = False
     for inline in value:
         if not isinstance(inline, dict):
             raise EpubPackageError("semantic inline values must be objects")
         text = inline.get("text")
+        role = inline.get("role")
         if not isinstance(text, str):
             raise EpubPackageError("semantic inline text must be a string")
+        if not isinstance(role, str):
+            raise EpubPackageError("semantic inline role must be a string")
+        if role == "footnote_ref":
+            omitted_reference = bool(text.strip()) or omitted_reference
+            continue
+        if omitted_reference and parts and _needs_navigation_separator(parts[-1], text):
+            parts.append(" ")
         parts.append(text)
+        omitted_reference = False
     return "".join(parts)
+
+
+def _needs_navigation_separator(previous: str, current: str) -> bool:
+    """Return whether text split by an omitted noteref needs a readable space."""
+    if not previous or not current:
+        return False
+    if previous[-1].isspace() or current[0].isspace():
+        return False
+    if current[0] in ",.;:!?)]}»”’":
+        return False
+    if previous[-1] in "([{«“‘/-":
+        return False
+    return True
 
 
 def _derive_identifier(

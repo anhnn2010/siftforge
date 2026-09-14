@@ -172,6 +172,66 @@ def test_navigation_uses_semantic_headings(tmp_path: Path) -> None:
     assert 'epub:type="toc"' in nav
 
 
+
+def test_navigation_omits_footnote_references_from_heading_label(
+    tmp_path: Path,
+) -> None:
+    """TOC labels should omit noterefs while preserving readable boundaries."""
+    ready = tmp_path / "ready"
+    _write_ready_fixture(ready)
+    semantic_path = ready / "semantic" / "document.json"
+    semantic = json.loads(semantic_path.read_text(encoding="utf-8"))
+    semantic["nodes"][0]["content"] = [
+        {
+            "text": "Thứ Sáu ngày 13",
+            "language": "vi",
+            "marks": [],
+            "role": "text",
+            "target_id": None,
+            "source_span_id": "span-1",
+        },
+        {
+            "text": "1",
+            "language": None,
+            "marks": [],
+            "role": "footnote_ref",
+            "target_id": "note-1",
+            "source_span_id": "span-ref-1",
+        },
+        {
+            "text": "Cá chép vượt vũ môn!",
+            "language": "vi",
+            "marks": [],
+            "role": "text",
+            "target_id": None,
+            "source_span_id": "span-2",
+        },
+        {
+            "text": "2",
+            "language": None,
+            "marks": [],
+            "role": "footnote_ref",
+            "target_id": "note-2",
+            "source_span_id": "span-ref-2",
+        },
+    ]
+    semantic_path.write_text(
+        json.dumps(semantic, ensure_ascii=False),
+        encoding="utf-8",
+    )
+    output = tmp_path / "book.epub"
+
+    EbookEpubPackageService().build(
+        ready,
+        output,
+        modified="2026-09-11T10:00:00Z",
+    )
+
+    with zipfile.ZipFile(output) as archive:
+        nav = archive.read("EPUB/nav.xhtml").decode("utf-8")
+    assert "Thứ Sáu ngày 13 Cá chép vượt vũ môn!" in nav
+    assert "Thứ Sáu ngày 131Cá chép vượt vũ môn!2" not in nav
+
 def test_navigation_falls_back_to_book_title_without_headings(
     tmp_path: Path,
 ) -> None:

@@ -162,11 +162,7 @@ class EbookSemanticProjector:
                 ),
             )
         if isinstance(node, FootnoteNode):
-            return SemanticFootnote(
-                node_id=node.node_id,
-                content=_project_spans(node.spans, footnote_refs),
-                label=node.label,
-            )
+            return _project_footnote(node, footnote_refs)
         if isinstance(node, AttributionNode):
             return SemanticAttribution(
                 node_id=node.node_id,
@@ -174,6 +170,31 @@ class EbookSemanticProjector:
             )
         raise TypeError(f"unsupported structural node: {type(node).__name__}")
 
+
+
+def _project_footnote(
+    footnote: FootnoteNode,
+    footnote_refs: dict[str, str],
+) -> SemanticFootnote:
+    """Project one footnote without duplicating its structural label in body text."""
+    content = list(_project_spans(footnote.spans, footnote_refs))
+    if footnote.label is not None:
+        for index, inline in enumerate(content):
+            if not inline.text.strip():
+                continue
+            if _normalized_footnote_label(inline.text) == footnote.label:
+                content.pop(index)
+            break
+    return SemanticFootnote(
+        node_id=footnote.node_id,
+        content=tuple(content),
+        label=footnote.label,
+    )
+
+
+def _normalized_footnote_label(text: str) -> str:
+    """Normalize one visible footnote marker for label/body de-duplication."""
+    return text.strip().strip("()[]{}").rstrip(".").strip()
 
 def _footnote_reference_map(
     relationships: tuple[DocumentRelationship, ...],

@@ -844,3 +844,17 @@ CLI exit codes distinguish validation from infrastructure failures:
 This keeps the architectural boundary explicit: the package builder owns EPUB
 construction and cheap deterministic sanity checks; EPUBCheck remains the
 external standards authority used as the distribution gate.
+
+## Milestone 1G-4r1 - Footnote and navigation cleanup
+
+Reader validation exposed two presentation bugs without changing the underlying
+EPUB semantics. Footnote bodies could repeat their visible label because the
+source label was preserved both as `FootnoteNode.label` and as the first body
+span. Semantic projection now removes that duplicated marker from body content
+while retaining the structural label exactly once for XHTML rendering.
+
+Navigation labels now omit `footnote_ref` inline content. The body heading keeps
+its clickable superscript reference, but `nav.xhtml` contains only the readable
+heading text. When a removed reference separated two adjacent heading fragments,
+the packager inserts a conservative word boundary so TOC labels do not collapse
+into strings such as `...13Cá chép...`.

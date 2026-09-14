@@ -15,6 +15,7 @@ from siftforge.ebook.semantic import (
     EbookSemanticProjector,
     InlineRole,
     SemanticFigure,
+    SemanticFootnote,
     SemanticHeading,
     SemanticParagraph,
     SemanticProjectionError,
@@ -24,6 +25,7 @@ from siftforge.ebook.structure import (
     DocumentRelationship,
     DocumentTextSpan,
     FigureNode,
+    FootnoteNode,
     HeadingNode,
     HeadingRole,
     ImageNode,
@@ -126,6 +128,31 @@ def test_projection_turns_exact_footnote_span_into_note_reference() -> None:
     assert paragraph.content[0].role is InlineRole.FOOTNOTE_REF
     assert paragraph.content[0].target_id == "footnote-1"
 
+
+
+def test_projection_removes_footnote_label_from_semantic_body() -> None:
+    """A structural footnote label must not be duplicated in semantic body text."""
+    document = BookDocument(
+        nodes=(
+            FootnoteNode(
+                node_id="note-1",
+                spans=(
+                    _span("note-label", "1"),
+                    _span("note-body", " Hiện tượng được giải thích."),
+                ),
+                label="1",
+            ),
+        )
+    )
+
+    result = EbookSemanticProjector().project(document, title="Book")
+
+    footnote = result.document.nodes[0]
+    assert isinstance(footnote, SemanticFootnote)
+    assert footnote.label == "1"
+    assert [inline.text for inline in footnote.content] == [
+        " Hiện tượng được giải thích."
+    ]
 
 def test_scenario_label_is_heading_like_but_not_hierarchy_level() -> None:
     """Scenario labels should not be forced into the heading hierarchy."""
