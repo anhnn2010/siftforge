@@ -7,10 +7,20 @@ from .book_assembly import (
     EbookPageRunArtifact,
     EbookPageRunLoader,
 )
+from .epub_package import (
+    EbookEpubPackageError,
+    EbookEpubPackageRun,
+    EbookEpubPackageService,
+)
 from .epub_ready import (
     EbookEpubReadyError,
     EbookEpubReadyRun,
     EbookEpubReadyService,
+)
+from .epub_validation import (
+    EbookEpubValidationError,
+    EbookEpubValidationRun,
+    EbookEpubValidationService,
 )
 from .page_evidence_extraction import (
     EbookPageEvidenceExtractionRun,
@@ -28,7 +38,13 @@ __all__: list[str] = [
     "EbookPDFPageExtractionService",
     "EbookPageEvidenceExtractionRun",
     "EbookPageExtractionRun",
+    "EbookEpubPackageError",
+    "EbookEpubPackageRun",
+    "EbookEpubPackageService",
     "EbookEpubReadyError",
     "EbookEpubReadyRun",
     "EbookEpubReadyService",
+    "EbookEpubValidationError",
+    "EbookEpubValidationRun",
+    "EbookEpubValidationService",
 ]

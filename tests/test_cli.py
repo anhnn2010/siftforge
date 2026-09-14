@@ -156,3 +156,54 @@ def test_render_xhtml_parser_accepts_assembly_metadata() -> None:
     assert args.title == "18 Năm Kim Cương"
     assert args.language == "vi"
     assert args.author == "Hồ Thị Hải Âu"
+
+
+def test_package_epub_parser_accepts_ready_root_and_metadata() -> None:
+    """Final EPUB packaging should be a provider-free ebook CLI action."""
+    parser = build_parser()
+    args = parser.parse_args(
+        [
+            "ebook",
+            "package-epub",
+            "--epub-ready",
+            "runs/book-xhtml",
+            "--output",
+            "dist/book.epub",
+            "--identifier",
+            "urn:isbn:9780000000000",
+            "--modified",
+            "2026-09-11T10:00:00Z",
+        ]
+    )
+
+    assert args.epub_ready == Path("runs/book-xhtml")
+    assert args.output == Path("dist/book.epub")
+    assert args.identifier == "urn:isbn:9780000000000"
+    assert args.modified == "2026-09-11T10:00:00Z"
+
+def test_validate_epub_parser_accepts_external_tool_configuration() -> None:
+    """EPUBCheck validation should remain an explicit provider-free stage."""
+    parser = build_parser()
+    args = parser.parse_args(
+        [
+            "ebook",
+            "validate-epub",
+            "--epub",
+            "dist/book.epub",
+            "--epubcheck-jar",
+            "tools/epubcheck.jar",
+            "--java-command",
+            "java",
+            "--timeout",
+            "90",
+            "--report",
+            "artifacts/epubcheck.json",
+        ]
+    )
+
+    assert args.epub == Path("dist/book.epub")
+    assert args.epubcheck_jar == Path("tools/epubcheck.jar")
+    assert args.java_command == "java"
+    assert args.timeout == 90.0
+    assert args.report == Path("artifacts/epubcheck.json")
+

@@ -707,3 +707,140 @@ This milestone deliberately does not yet create `mimetype`, `META-INF`, OPF,
 navigation documents, or the final ZIP container. Those packaging concerns are
 reserved for the next EPUB milestone after the semantic XHTML surface is
 stable.
+
+## Milestone 1G-3 - Final EPUB 3 package builder
+
+Milestone 1G-3 packages the provider-free XHTML artifacts from 1G-2 into an
+actual `.epub` archive.
+
+```text
+EPUB-ready XHTML directory
+        ↓
+EpubPackageBuilder
+        ↓
+mimetype
+META-INF/container.xml
+EPUB/package.opf
+EPUB/nav.xhtml
+EPUB/text/content.xhtml
+EPUB/styles/book.css
+EPUB/assets/*
+        ↓
+validated .epub ZIP container
+```
+
+Package an existing 1G-2 output with:
+
+```bash
+siftforge ebook package-epub \
+  --epub-ready runs/18-nam-kim-cuong-xhtml \
+  --output dist/18-nam-kim-cuong.epub
+```
+
+Optional publication metadata can be pinned for reproducible builds:
+
+```bash
+siftforge ebook package-epub \
+  --epub-ready runs/18-nam-kim-cuong-xhtml \
+  --output dist/18-nam-kim-cuong.epub \
+  --identifier urn:isbn:9780000000000 \
+  --modified 2026-09-11T10:45:00Z
+```
+
+When no identifier is supplied, SiftForge derives a stable UUID URN from the
+publication metadata plus rendered content, stylesheet, and referenced assets.
+The EPUB 3 `dcterms:modified` timestamp defaults to current UTC time; supplying
+`--modified` makes the package byte-reproducible for identical inputs.
+
+The builder follows the EPUB ZIP constraints that are easy to violate when
+creating archives manually:
+
+- `mimetype` is the first ZIP member;
+- `mimetype` is stored **uncompressed** and contains exactly
+  `application/epub+zip`;
+- `META-INF/container.xml` points to `EPUB/package.opf`;
+- the OPF contains EPUB 3 metadata, a navigation item, manifest, and spine;
+- semantic headings from `semantic/document.json` become navigation links;
+- books without resolved headings receive a title-level fallback TOC entry;
+- CSS, XHTML, and referenced figure assets are copied into the OPF manifest
+  with explicit media types;
+- all persisted paths are checked for traversal and overlapping package paths.
+
+Before publishing the destination file, SiftForge reopens the generated
+archive and performs internal structural checks. It verifies the ZIP mimetype
+rules, parses the container, OPF, navigation XHTML, and content XHTML, confirms
+that every OPF manifest item exists, and verifies that navigation fragments
+point to real content IDs.
+
+This validation is intentionally **not a replacement for EPUBCheck**. It catches
+SiftForge packaging defects early and keeps unit tests provider-free. A later
+milestone will add EPUBCheck as an external standards-validation gate before a
+book is considered distribution-ready.
+
+## Milestone 1G-4 - EPUBCheck standards-validation gate
+
+Milestone 1G-4 keeps standards validation as a distinct stage after deterministic
+EPUB packaging:
+
+```text
+EPUB-ready XHTML
+        ↓
+SiftForge EPUB package builder
+        ↓
+internal structural checks
+        ↓
+final .epub
+        ↓
+official EPUBCheck JAR
+        ↓
+PASS / FAIL + captured JSON report
+```
+
+SiftForge deliberately does **not** bundle or auto-download EPUBCheck. Point the
+validator at an EPUBCheck JAR that you install separately, either explicitly or
+through `EPUBCHECK_JAR`:
+
+```bash
+export EPUBCHECK_JAR=/opt/epubcheck/epubcheck.jar
+
+siftforge ebook validate-epub \
+  --epub dist/18-nam-kim-cuong.epub \
+  --report artifacts/18-nam-kim-cuong.epubcheck.json
+```
+
+On PowerShell the environment variable can be configured with:
+
+```powershell
+$env:EPUBCHECK_JAR = 'C:\tools\epubcheck\epubcheck.jar'
+```
+
+An explicit path is also supported:
+
+```bash
+siftforge ebook validate-epub \
+  --epub dist/18-nam-kim-cuong.epub \
+  --epubcheck-jar tools/epubcheck.jar
+```
+
+The validator invokes the external tool as:
+
+```text
+java -jar <epubcheck.jar> <book.epub>
+```
+
+`--java-command` can select another Java executable and `--timeout` controls the
+maximum validation duration. SiftForge captures EPUBCheck stdout/stderr without
+trying to reinterpret or rewrite its diagnostics. The optional JSON report also
+records the EPUB SHA-256 and EPUBCheck JAR SHA-256 so a CI result is traceable to
+both exact inputs.
+
+CLI exit codes distinguish validation from infrastructure failures:
+
+- `0`: EPUBCheck passed;
+- `1`: EPUBCheck ran successfully but reported the EPUB as invalid;
+- `2`: configuration or execution failed, such as a missing JAR, missing Java,
+  or a timeout.
+
+This keeps the architectural boundary explicit: the package builder owns EPUB
+construction and cheap deterministic sanity checks; EPUBCheck remains the
+external standards authority used as the distribution gate.
