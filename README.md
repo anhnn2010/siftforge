@@ -873,3 +873,21 @@ flow; hierarchical headings and scenario labels/titles remain navigable.
 
 Existing prompt revisions 5 and 5.1 remain versioned for reproducibility. Schema v5 is
 unchanged.
+
+## Milestone 1G-4r3 - Reader-stable subtitle and noteref rendering
+
+KOReader validation confirmed that page-13 extraction, structural analysis, and
+footnote relationships were already correct, but adjacent subtitle-like labels
+could still appear visually collapsed in the reading view. The XHTML renderer
+now emits non-hierarchical heading labels as explicit block `div` elements and
+ships a `display: block` rule so reader styles cannot accidentally flow adjacent
+labels inline.
+
+Footnote references keep `epub:type="noteref"` on the clickable anchor, while a
+`sup.noteref` wrapper and conservative CSS make the visible marker reliably
+superscript without changing the semantic link target. This applies equally to
+subtitle labels and normal headings such as the page-118 footnote case.
+
+No extraction prompt, page-evidence schema, structural rule, or semantic model
+changed in this revision; it is intentionally a renderer-only refinement based
+on real reader behavior.

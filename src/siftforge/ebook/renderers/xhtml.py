@@ -201,7 +201,7 @@ def _render_heading(node: SemanticHeading, indent: str) -> str:
     role = _css_token(node.role.value)
     if node.level is None:
         return _text_element(
-            "p",
+            "div",
             node.node_id,
             node.content,
             indent=indent,
@@ -311,8 +311,10 @@ def _render_inline(value: SemanticInline) -> str:
             else ""
         )
         rendered = (
+            '<sup class="noteref">'
             f'<a{source_id} epub:type="noteref" '
             f'href="#{_attr(value.target_id)}">{rendered}</a>'
+            "</sup>"
         )
     return rendered
 
@@ -355,9 +357,17 @@ figure {
   text-align: center;
 }
 figcaption,
-.attribution,
-.heading-label {
+.attribution {
   margin-top: 0.5em;
+}
+.heading-label {
+  display: block;
+  margin: 0.5em 0;
+}
+.noteref {
+  font-size: 0.75em;
+  line-height: 0;
+  vertical-align: super;
 }
 .verse {
   margin: 1em 0 1em 2em;

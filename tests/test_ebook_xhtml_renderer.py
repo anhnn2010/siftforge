@@ -192,6 +192,7 @@ def test_renderer_links_footnote_reference_to_footnote_body(tmp_path: Path) -> N
     assert 'epub:type="noteref"' in xhtml
     assert 'href="#note-1"' in xhtml
     assert 'epub:type="footnote"' in xhtml
+    assert '<sup class="noteref">' in xhtml
 
 
 
@@ -329,6 +330,75 @@ def test_renderer_keeps_subtitle_footnote_reference_clickable(tmp_path: Path) ->
     )
     xhtml = result.content_path.read_text(encoding="utf-8")
 
-    assert 'class="heading-label role-subtitle"' in xhtml
+    assert '<div id="subtitle-1" class="heading-label role-subtitle">' in xhtml
     assert 'epub:type="noteref"' in xhtml
     assert 'href="#note-1"' in xhtml
+    assert '<sup class="noteref">' in xhtml
+
+def test_renderer_keeps_adjacent_subtitle_footnotes_visibly_separate(
+    tmp_path: Path,
+) -> None:
+    """Adjacent subtitle labels should remain separate block boxes in readers."""
+    document = SemanticBookDocument(
+        title="Book",
+        language="vi",
+        author=None,
+        nodes=(
+            SemanticHeading(
+                node_id="subtitle-1",
+                content=(
+                    _inline("Thứ Sáu ngày 13"),
+                    _inline(
+                        "1",
+                        role=InlineRole.FOOTNOTE_REF,
+                        target_id="note-1",
+                        source_span_id="span-ref-1",
+                    ),
+                ),
+                role=HeadingRole.SUBTITLE,
+                level=None,
+            ),
+            SemanticHeading(
+                node_id="subtitle-2",
+                content=(
+                    _inline("Cá chép vượt vũ môn!"),
+                    _inline(
+                        "2",
+                        role=InlineRole.FOOTNOTE_REF,
+                        target_id="note-2",
+                        source_span_id="span-ref-2",
+                    ),
+                ),
+                role=HeadingRole.SUBTITLE,
+                level=None,
+            ),
+            SemanticFootnote(
+                node_id="note-1",
+                content=(_inline("Chú thích một"),),
+                label="1",
+            ),
+            SemanticFootnote(
+                node_id="note-2",
+                content=(_inline("Chú thích hai"),),
+                label="2",
+            ),
+        ),
+    )
+
+    result = EpubReadyXhtmlRenderer().render(
+        document,
+        asset_root=tmp_path,
+        output_root=tmp_path / "out",
+    )
+    xhtml = result.content_path.read_text(encoding="utf-8")
+    css = result.stylesheet_path.read_text(encoding="utf-8")
+
+    first = '<div id="subtitle-1" class="heading-label role-subtitle">'
+    second = '<div id="subtitle-2" class="heading-label role-subtitle">'
+    assert first in xhtml
+    assert second in xhtml
+    assert xhtml.index(first) < xhtml.index(second)
+    assert xhtml.count('<sup class="noteref">') == 2
+    assert ".heading-label {\n  display: block;" in css
+    assert ".noteref {\n  font-size: 0.75em;" in css
+
