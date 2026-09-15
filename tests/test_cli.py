@@ -113,6 +113,36 @@ def test_cli_evaluate_golden_can_write_json_report(tmp_path: Path) -> None:
     assert payload["summary"]["cases_total"] == 9
 
 
+
+def test_extract_book_parser_accepts_resume_range_options() -> None:
+    """Whole-book extraction should expose safe resume and page-range controls."""
+    parser = build_parser()
+    args = parser.parse_args(
+        [
+            "ebook",
+            "extract-book",
+            "--pdf",
+            "book.pdf",
+            "--model",
+            "gemini-3.6-flash",
+            "--runs-root",
+            "runs/book",
+            "--start-page",
+            "10",
+            "--end-page",
+            "20",
+            "--continue-on-error",
+        ]
+    )
+
+    assert args.pdf == Path("book.pdf")
+    assert args.model == "gemini-3.6-flash"
+    assert args.runs_root == Path("runs/book")
+    assert args.start_page == 10
+    assert args.end_page == 20
+    assert args.force is False
+    assert args.continue_on_error is True
+
 def test_assemble_book_parser_requires_runs_root_and_output() -> None:
     """Book assembly should be exposed as a provider-free ebook CLI action."""
     parser = build_parser()

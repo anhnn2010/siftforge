@@ -16,6 +16,8 @@ from siftforge.ebook.extraction import EbookPageNormalizationError
 from siftforge.ebook.pipeline import (
     EbookBookAssemblyError,
     EbookBookAssemblyService,
+    EbookBookExtractionError,
+    EbookBookExtractionProgress,
     EbookBuildError,
     EbookBuildService,
     EbookEpubPackageError,
@@ -24,6 +26,7 @@ from siftforge.ebook.pipeline import (
     EbookEpubReadyService,
     EbookEpubValidationError,
     EbookEpubValidationService,
+    EbookPDFBookEvidenceExtractionService,
     EbookPDFPageEvidenceExtractionService,
     EbookPDFPageExtractionService,
 )
@@ -81,6 +84,54 @@ def build_parser() -> argparse.ArgumentParser:
         type=Path,
         default=None,
         help="Artifact directory. Defaults to runs/<pdf-stem>/page-NNNN.",
+    )
+
+    extract_book = ebook_actions.add_parser(
+        "extract-book",
+        help=(
+            "Extract a PDF page range into resumable canonical v5 page runs."
+        ),
+    )
+    extract_book.add_argument(
+        "--pdf",
+        required=True,
+        type=Path,
+        help="Path to the input scanned PDF.",
+    )
+    extract_book.add_argument(
+        "--model",
+        required=True,
+        help="Explicit Gemini model ID used for every selected page.",
+    )
+    extract_book.add_argument(
+        "--runs-root",
+        type=Path,
+        default=None,
+        help=(
+            "Canonical page-run root. Defaults to runs/<pdf-stem>."
+        ),
+    )
+    extract_book.add_argument(
+        "--start-page",
+        type=int,
+        default=1,
+        help="Inclusive first physical PDF page. Defaults to 1.",
+    )
+    extract_book.add_argument(
+        "--end-page",
+        type=int,
+        default=None,
+        help="Inclusive last physical PDF page. Defaults to the final page.",
+    )
+    extract_book.add_argument(
+        "--force",
+        action="store_true",
+        help="Re-extract selected pages even when matching runs already exist.",
+    )
+    extract_book.add_argument(
+        "--continue-on-error",
+        action="store_true",
+        help="Record failed pages and continue instead of stopping immediately.",
     )
 
     assemble_book = ebook_actions.add_parser(
@@ -328,6 +379,8 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     if args.domain == "ebook" and args.action == "extract-page":
         return _run_ebook_extract_page(args)
+    if args.domain == "ebook" and args.action == "extract-book":
+        return _run_ebook_extract_book(args)
     if args.domain == "ebook" and args.action == "assemble-book":
         return _run_ebook_assemble_book(args)
     if args.domain == "ebook" and args.action == "render-xhtml":
@@ -445,6 +498,73 @@ def _run_ebook_extract_page_v4(
     print(f"kind:     {run.page_content.page_kind.value}")
     print(f"blocks:   {len(run.page_content.blocks)}")
     print("result: typed page content saved to normalized/page.json")
+    return 0
+
+
+def _run_ebook_extract_book(args: argparse.Namespace) -> int:
+    """Extract a PDF page range with resumable canonical v5 page runs."""
+    if not (os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")):
+        print(
+            "error: set GEMINI_API_KEY or GOOGLE_API_KEY before calling Gemini",
+            file=sys.stderr,
+        )
+        return 2
+
+    pdf_path = args.pdf.expanduser().resolve()
+    runs_root = (
+        args.runs_root.expanduser().resolve()
+        if args.runs_root is not None
+        else (Path.cwd() / "runs" / pdf_path.stem).resolve()
+    )
+    provider = GeminiProvider(
+        GeminiProviderConfig(
+            model=args.model,
+            temperature=0.0,
+        )
+    )
+    service = EbookPDFBookEvidenceExtractionService(provider)
+
+    def print_progress(progress: EbookBookExtractionProgress) -> None:
+        """Print one compact line after each selected physical page."""
+        result = progress.result
+        suffix = (
+            f" - {result.error_type}: {result.error_message}"
+            if result.error_message
+            else ""
+        )
+        print(
+            f"[{progress.completed}/{progress.total}] "
+            f"page {result.page_number:04d} {result.status.value}{suffix}"
+        )
+
+    try:
+        run = service.extract_book(
+            pdf_path,
+            runs_root,
+            model=args.model,
+            start_page=args.start_page,
+            end_page=args.end_page,
+            force=args.force,
+            continue_on_error=args.continue_on_error,
+            progress_callback=print_progress,
+        )
+    except (FileNotFoundError, EbookBookExtractionError) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+
+    print(f"runs:      {run.runs_root}")
+    print(f"extracted: {run.extracted_count}")
+    print(f"reused:    {run.reused_count}")
+    print(f"failed:    {run.failed_count}")
+    print(f"manifest:  {run.manifest_path}")
+    if run.total_usage:
+        total_tokens = run.total_usage.get("total_token_count")
+        if total_tokens is not None:
+            print(f"tokens:    {total_tokens}")
+    if run.failed_count:
+        print("result: completed with failed pages")
+        return 1
+    print("result: resumable page extraction complete")
     return 0
 
 

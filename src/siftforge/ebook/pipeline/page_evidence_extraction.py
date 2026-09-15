@@ -79,11 +79,30 @@ class EbookPDFPageEvidenceExtractionService:
             raise ValueError("page number must be greater than or equal to 1")
 
         run_path = Path(run_dir).expanduser().resolve()
-        artifact_store = FilesystemArtifactStore(run_path)
         pdf_source = PDFSource(pdf_path)
         source_ref = self._find_page(pdf_source, page_number)
-
         materializer = PDFPageMaterializer(pdf_source.path)
+        return self.extract_source_page(
+            source_ref=source_ref,
+            materializer=materializer,
+            run_dir=run_path,
+        )
+
+    def extract_source_page(
+        self,
+        *,
+        source_ref: SourceRef,
+        materializer: PDFPageMaterializer,
+        run_dir: str | Path,
+    ) -> EbookPageEvidenceExtractionRun:
+        """Extract a prepared PDF page reference using a reusable materializer.
+
+        This entry point lets the multi-page runner reuse one ``PDFSource`` and
+        ``PDFPageMaterializer`` across hundreds of pages instead of repeatedly
+        reopening and rescanning the source PDF.
+        """
+        run_path = Path(run_dir).expanduser().resolve()
+        artifact_store = FilesystemArtifactStore(run_path)
         asset = materializer.materialize(source_ref, run_path / "assets")
 
         task = ExtractionTask(

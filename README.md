@@ -971,3 +971,85 @@ The orchestration exit status preserves the stage distinction:
 `build-manifest.json` records the page/node/figure counts, EPUB metadata, TOC
 count, validation status, and the `clean-derived-stages` policy so a complete
 build remains inspectable even though the user only needs one CLI command.
+
+## Milestone 1G-6 - Resumable whole-book page extraction
+
+Milestone 1G-6 closes the gap between one-page smoke tests and a real full-book
+run. The new command extracts an inclusive PDF page range into the same canonical
+`page-NNNN` artifacts already consumed by `build-epub`:
+
+```bash
+siftforge ebook extract-book \
+  --pdf 18-nam-kim-cuong.pdf \
+  --model gemini-3.6-flash
+```
+
+By default the output root is `runs/<pdf-stem>`. A custom root and a smaller
+range can be selected explicitly:
+
+```bash
+siftforge ebook extract-book \
+  --pdf 18-nam-kim-cuong.pdf \
+  --model gemini-3.6-flash \
+  --runs-root runs/18-nam-kim-cuong \
+  --start-page 1 \
+  --end-page 20
+```
+
+The runner is **resumable by default**. Before making a provider call it validates
+an existing page run against:
+
+- source page identity and source-page hash;
+- source PDF SHA-256;
+- active prompt name/version (`ebook_page_evidence` 5.2);
+- schema name/version (v5);
+- requested model identity;
+- canonical normalized evidence and referenced source asset.
+
+Only an exact match is reused. Incomplete, corrupt, stale-prompt, changed-PDF, or
+changed-model page directories are rebuilt from scratch. Fresh extraction is written
+to a sibling staging directory and published only after the complete page run succeeds,
+so a failed refresh does not destroy the previous canonical run. `--force` disables
+reuse for the selected range.
+
+The command checkpoints progress atomically after every page in:
+
+```text
+runs/<pdf-stem>/book-extraction.json
+```
+
+If page 200 fails after pages 1-199 completed, the default behavior is to stop.
+Rerunning the same command reuses pages 1-199 and resumes at page 200. This keeps
+provider cost bounded without introducing a cache database or hiding source
+artifacts behind opaque state.
+
+For diagnostic batches, `--continue-on-error` records a failed page and continues
+with later pages. The command exits non-zero when failed pages remain.
+
+Each progress line reports whether a page was freshly extracted, reused, or failed:
+
+```text
+[18/432] page 0018 reused
+[19/432] page 0019 extracted
+```
+
+The root checkpoint also aggregates numeric provider usage counters from the
+canonical page manifests so token usage remains inspectable across resumed runs.
+
+The multi-page runner reuses one `PDFSource` discovery pass and one
+`PDFPageMaterializer`/`PdfReader` across the selected range; it does not repeatedly
+rescan the PDF for every page.
+
+Once extraction is complete, the existing provider-free build remains unchanged:
+
+```bash
+siftforge ebook build-epub \
+  --runs-root runs/18-nam-kim-cuong \
+  --output dist/18-nam-kim-cuong.epub \
+  --title "18 Năm Kim Cương" \
+  --language vi
+```
+
+This keeps the layer boundary intact: `extract-book` owns expensive page evidence,
+while `build-epub` owns deterministic book assembly, semantic projection, XHTML,
+EPUB packaging, and optional EPUBCheck validation.

@@ -7,6 +7,14 @@ from .book_assembly import (
     EbookPageRunArtifact,
     EbookPageRunLoader,
 )
+from .book_extraction import (
+    EbookBookExtractionError,
+    EbookBookExtractionProgress,
+    EbookBookExtractionRun,
+    EbookBookPageExtractionResult,
+    EbookBookPageStatus,
+    EbookPDFBookEvidenceExtractionService,
+)
 from .build_epub import (
     EbookBuildError,
     EbookBuildRun,
@@ -34,6 +42,12 @@ from .page_evidence_extraction import (
 from .page_extraction import EbookPageExtractionRun, EbookPDFPageExtractionService
 
 __all__: list[str] = [
+    "EbookBookExtractionError",
+    "EbookBookExtractionProgress",
+    "EbookBookExtractionRun",
+    "EbookBookPageExtractionResult",
+    "EbookBookPageStatus",
+    "EbookPDFBookEvidenceExtractionService",
     "EbookBuildError",
     "EbookBuildRun",
     "EbookBuildService",
