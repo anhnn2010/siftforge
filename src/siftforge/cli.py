@@ -16,6 +16,8 @@ from siftforge.ebook.extraction import EbookPageNormalizationError
 from siftforge.ebook.pipeline import (
     EbookBookAssemblyError,
     EbookBookAssemblyService,
+    EbookBuildError,
+    EbookBuildService,
     EbookEpubPackageError,
     EbookEpubPackageService,
     EbookEpubReadyError,
@@ -160,6 +162,96 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
 
+    build_epub = ebook_actions.add_parser(
+        "build-epub",
+        help=(
+            "Build a final EPUB from existing page runs through all "
+            "provider-free stages."
+        ),
+    )
+    build_epub.add_argument(
+        "--runs-root",
+        required=True,
+        type=Path,
+        help="Directory containing canonical page-* extraction runs.",
+    )
+    build_epub.add_argument(
+        "--output",
+        required=True,
+        type=Path,
+        help="Destination final .epub file.",
+    )
+    build_epub.add_argument(
+        "--title",
+        required=True,
+        help="Book title used by semantic XHTML and EPUB metadata.",
+    )
+    build_epub.add_argument(
+        "--language",
+        default=None,
+        help="Optional BCP 47 book language, for example vi or en.",
+    )
+    build_epub.add_argument(
+        "--author",
+        default=None,
+        help="Optional book author metadata.",
+    )
+    build_epub.add_argument(
+        "--work-dir",
+        type=Path,
+        default=None,
+        help=(
+            "Derived-artifact workspace. Defaults to a sibling "
+            "<runs-root-name>-build directory."
+        ),
+    )
+    build_epub.add_argument(
+        "--identifier",
+        default=None,
+        help="Optional publication identifier. Defaults to a stable UUID URN.",
+    )
+    build_epub.add_argument(
+        "--modified",
+        default=None,
+        help=(
+            "Optional EPUB UTC modified timestamp "
+            "(YYYY-MM-DDTHH:MM:SSZ)."
+        ),
+    )
+    build_epub.add_argument(
+        "--validate",
+        action="store_true",
+        help="Run EPUBCheck after packaging the EPUB.",
+    )
+    build_epub.add_argument(
+        "--epubcheck-jar",
+        type=Path,
+        default=None,
+        help=(
+            "EPUBCheck JAR used with --validate. Defaults to EPUBCHECK_JAR."
+        ),
+    )
+    build_epub.add_argument(
+        "--java-command",
+        default="java",
+        help="Java executable used for EPUBCheck. Defaults to java.",
+    )
+    build_epub.add_argument(
+        "--timeout",
+        type=float,
+        default=120.0,
+        help="EPUBCheck timeout in seconds. Defaults to 120.",
+    )
+    build_epub.add_argument(
+        "--epubcheck-report",
+        type=Path,
+        default=None,
+        help=(
+            "Optional EPUBCheck JSON report. With --validate, defaults to "
+            "<work-dir>/reports/epubcheck.json."
+        ),
+    )
+
     validate_epub = ebook_actions.add_parser(
         "validate-epub",
         help="Validate a final EPUB archive with the official EPUBCheck JAR.",
@@ -242,6 +334,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _run_ebook_render_xhtml(args)
     if args.domain == "ebook" and args.action == "package-epub":
         return _run_ebook_package_epub(args)
+    if args.domain == "ebook" and args.action == "build-epub":
+        return _run_ebook_build_epub(args)
     if args.domain == "ebook" and args.action == "validate-epub":
         return _run_ebook_validate_epub(args)
     if args.domain == "ebook" and args.action == "evaluate-golden":
@@ -322,7 +416,7 @@ def _run_ebook_extract_page_v5(
     print(f"source:   {run.source.source_id}")
     print(f"asset:    {run.asset.path}")
     print(f"run:      {run.run_dir}")
-    print("contract: v5 page evidence (prompt 5.1)")
+    print("contract: v5 page evidence (prompt 5.2)")
     print(f"kind:     {run.page_evidence.page_kind_hint.value}")
     print(f"blocks:   {len(run.page_evidence.blocks)}")
     print("result: typed page evidence saved to normalized/page.json")
@@ -418,6 +512,74 @@ def _run_ebook_package_epub(args: argparse.Namespace) -> int:
     print(f"toc:        {run.package.toc_entry_count} entries")
     print("result: structurally checked EPUB 3 package created")
     return 0
+
+
+def _run_ebook_build_epub(args: argparse.Namespace) -> int:
+    """Build a final EPUB from page runs through all provider-free stages."""
+    runs_root = args.runs_root.expanduser().resolve()
+    output = args.output.expanduser().resolve()
+    jar_value = args.epubcheck_jar
+    if args.validate and jar_value is None:
+        env_value = os.getenv("EPUBCHECK_JAR")
+        if env_value:
+            jar_value = Path(env_value)
+    if args.validate and jar_value is None:
+        print(
+            "error: --validate requires --epubcheck-jar or EPUBCHECK_JAR",
+            file=sys.stderr,
+        )
+        return 2
+    if not args.validate and args.epubcheck_report is not None:
+        print(
+            "error: --epubcheck-report requires --validate",
+            file=sys.stderr,
+        )
+        return 2
+
+    try:
+        run = EbookBuildService().build(
+            runs_root,
+            output,
+            title=args.title,
+            language=args.language,
+            author=args.author,
+            work_dir=args.work_dir,
+            identifier=args.identifier,
+            modified=args.modified,
+            validate=args.validate,
+            epubcheck_jar=jar_value,
+            java_command=args.java_command,
+            timeout_seconds=args.timeout,
+            report_path=args.epubcheck_report,
+        )
+    except EbookBuildError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+
+    print(f"pages:      {len(run.assembly.page_runs)}")
+    print(f"nodes:      {len(run.assembly.document.nodes)}")
+    print(f"figures:    {len(run.assembly.figure_assets)}")
+    print(f"assets:     {len(run.epub_ready.render.copied_assets)}")
+    print(f"work:       {run.work_dir}")
+    print(f"epub:       {run.package.package.epub_path}")
+    print(f"identifier: {run.package.package.identifier}")
+    print(f"manifest:   {run.manifest_path}")
+    if run.validation is None:
+        print("epubcheck:  skipped")
+        print("result:     EPUB build complete")
+        return 0
+
+    result = run.validation.result
+    print(f"epubcheck:  {'PASS' if result.passed else 'FAIL'}")
+    if run.validation.report_path is not None:
+        print(f"report:     {run.validation.report_path}")
+    build_result = (
+        "EPUB build and validation complete"
+        if result.passed
+        else "EPUBCheck failed"
+    )
+    print(f"result:     {build_result}")
+    return 0 if result.passed else 1
 
 
 def _run_ebook_validate_epub(args: argparse.Namespace) -> int:

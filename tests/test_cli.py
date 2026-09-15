@@ -181,6 +181,41 @@ def test_package_epub_parser_accepts_ready_root_and_metadata() -> None:
     assert args.identifier == "urn:isbn:9780000000000"
     assert args.modified == "2026-09-11T10:00:00Z"
 
+
+def test_build_epub_parser_accepts_end_to_end_options() -> None:
+    """One command should orchestrate all provider-free EPUB build stages."""
+    parser = build_parser()
+    args = parser.parse_args(
+        [
+            "ebook",
+            "build-epub",
+            "--runs-root",
+            "runs/book",
+            "--output",
+            "dist/book.epub",
+            "--title",
+            "18 Năm Kim Cương",
+            "--language",
+            "vi",
+            "--author",
+            "Hồ Thị Hải Âu",
+            "--work-dir",
+            "runs/book-build",
+            "--validate",
+            "--epubcheck-jar",
+            "tools/epubcheck.jar",
+        ]
+    )
+
+    assert args.runs_root == Path("runs/book")
+    assert args.output == Path("dist/book.epub")
+    assert args.title == "18 Năm Kim Cương"
+    assert args.language == "vi"
+    assert args.author == "Hồ Thị Hải Âu"
+    assert args.work_dir == Path("runs/book-build")
+    assert args.validate is True
+    assert args.epubcheck_jar == Path("tools/epubcheck.jar")
+
 def test_validate_epub_parser_accepts_external_tool_configuration() -> None:
     """EPUBCheck validation should remain an explicit provider-free stage."""
     parser = build_parser()

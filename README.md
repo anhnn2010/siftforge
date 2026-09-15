@@ -891,3 +891,83 @@ subtitle labels and normal headings such as the page-118 footnote case.
 No extraction prompt, page-evidence schema, structural rule, or semantic model
 changed in this revision; it is intentionally a renderer-only refinement based
 on real reader behavior.
+
+## Milestone 1G-5 - End-to-end EPUB build orchestration
+
+Milestone 1G-5 adds a single provider-free command that composes the existing
+book assembly, semantic XHTML, EPUB packaging, and optional EPUBCheck stages
+without collapsing their internal boundaries.
+
+The normal local workflow is now:
+
+```bash
+siftforge ebook build-epub \
+  --runs-root runs/18-nam-kim-cuong \
+  --output dist/18-nam-kim-cuong.epub \
+  --title "18 Năm Kim Cương" \
+  --language vi
+```
+
+The command consumes existing `page-*` extraction runs. It does **not** call
+Gemini again. The individual stage commands remain available for debugging and
+inspection:
+
+```text
+page-* runs
+   ↓ assemble-book
+BookDocument
+   ↓ render-xhtml
+semantic XHTML/CSS/assets
+   ↓ package-epub
+final EPUB
+   ↓ optional validate-epub
+EPUBCheck result
+```
+
+`build-epub` deliberately rebuilds the derived assembly and EPUB-ready stages
+from scratch every time. This is the first freshness policy: correctness is
+preferred over incremental caching, so a newly extracted page cannot be hidden
+behind stale `BookDocument` or XHTML artifacts. The source page runs are never
+removed.
+
+By default the derived workspace is a sibling of the runs root:
+
+```text
+runs/
+├── 18-nam-kim-cuong/
+│   └── page-*/
+└── 18-nam-kim-cuong-build/
+    ├── assembly/
+    ├── epub-ready/
+    └── build-manifest.json
+```
+
+A custom workspace can be selected with `--work-dir`.
+
+EPUBCheck remains optional and external. To include it in the same command:
+
+```bash
+siftforge ebook build-epub \
+  --runs-root runs/18-nam-kim-cuong \
+  --output dist/18-nam-kim-cuong.epub \
+  --title "18 Năm Kim Cương" \
+  --language vi \
+  --validate \
+  --epubcheck-jar /path/to/epubcheck.jar
+```
+
+When `--validate` is used without `--epubcheck-jar`, the command falls back to
+`EPUBCHECK_JAR`. The default validation report is written beneath the build
+workspace at `reports/epubcheck.json`.
+
+The orchestration exit status preserves the stage distinction:
+
+```text
+0  EPUB built successfully; EPUBCheck also passed when requested
+1  EPUB was built, but EPUBCheck reported standards errors
+2  configuration or pipeline execution failed
+```
+
+`build-manifest.json` records the page/node/figure counts, EPUB metadata, TOC
+count, validation status, and the `clean-derived-stages` policy so a complete
+build remains inspectable even though the user only needs one CLI command.
