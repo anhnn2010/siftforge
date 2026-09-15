@@ -8,7 +8,7 @@ from typing import Any
 
 from siftforge.ebook.evidence import PageExtraction
 from siftforge.ebook.extraction import (
-    EBOOK_PAGE_PROMPT_V5_R1,
+    EBOOK_PAGE_PROMPT_V5_R2,
     EBOOK_PAGE_SCHEMA_V5,
     EbookPageEvidenceNormalizer,
 )
@@ -89,7 +89,7 @@ class EbookPDFPageEvidenceExtractionService:
         task = ExtractionTask(
             source=source_ref,
             capability="document_transcription",
-            prompt=EBOOK_PAGE_PROMPT_V5_R1,
+            prompt=EBOOK_PAGE_PROMPT_V5_R2,
             schema=EBOOK_PAGE_SCHEMA_V5,
             assets=(asset,),
             metadata={

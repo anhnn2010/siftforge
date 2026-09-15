@@ -305,3 +305,46 @@ def test_package_rejects_invalid_modified_timestamp(tmp_path: Path) -> None:
             tmp_path / "book.epub",
             modified="2026-09-11",
         )
+
+
+def test_navigation_excludes_supporting_subtitle_headings(tmp_path: Path) -> None:
+    """Subtitle labels should render in body without becoming standalone TOC entries."""
+    ready = tmp_path / "ready"
+    _write_ready_fixture(ready)
+    semantic_path = ready / "semantic" / "document.json"
+    semantic = json.loads(semantic_path.read_text(encoding="utf-8"))
+    semantic["nodes"].append(
+        {
+            "type": "heading",
+            "node_id": "subtitle-1",
+            "role": "subtitle",
+            "level": None,
+            "content": [
+                {
+                    "text": "Thứ Sáu ngày 13",
+                    "language": "vi",
+                    "marks": [],
+                    "role": "text",
+                    "target_id": None,
+                    "source_span_id": "span-subtitle-1",
+                }
+            ],
+        }
+    )
+    semantic_path.write_text(
+        json.dumps(semantic, ensure_ascii=False),
+        encoding="utf-8",
+    )
+    output = tmp_path / "book.epub"
+
+    EbookEpubPackageService().build(
+        ready,
+        output,
+        modified="2026-09-14T11:45:00Z",
+    )
+
+    with zipfile.ZipFile(output) as archive:
+        nav = archive.read("EPUB/nav.xhtml").decode("utf-8")
+
+    assert "Chương một" in nav
+    assert "Thứ Sáu ngày 13" not in nav

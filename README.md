@@ -107,7 +107,7 @@ PDFPageMaterializer
   ↓
 original JPEG MaterializedAsset
   ↓
-ebook page-evidence prompt 5.1 + JSON Schema v5
+ebook page-evidence prompt 5.2 + JSON Schema v5
   ↓
 GeminiProvider
   ↓
@@ -858,3 +858,18 @@ its clickable superscript reference, but `nav.xhtml` contains only the readable
 heading text. When a removed reference separated two adjacent heading fragments,
 the packager inserts a conservative word boundary so TOC labels do not collapse
 into strings such as `...13Cá chép...`.
+
+## Milestone 1G-4r2 - Page-13 title/footnote boundary refinement
+
+Reader validation exposed a page-local extraction ambiguity on the preface opener:
+two distinct centered subtitle-like lines, each carrying its own superscript footnote
+reference, could be merged into one heading. Prompt revision **5.2** keeps those lines
+as separate blocks and explicitly preserves superscript footnote-reference spans even
+inside short title-like text.
+
+The EPUB navigation policy also excludes supporting `chapter_label`, `subtitle`, and
+`genre_label` headings from standalone TOC entries. They remain visible in the reading
+flow; hierarchical headings and scenario labels/titles remain navigable.
+
+Existing prompt revisions 5 and 5.1 remain versioned for reproducibility. Schema v5 is
+unchanged.

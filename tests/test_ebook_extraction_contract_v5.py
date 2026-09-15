@@ -4,6 +4,7 @@ from siftforge.ebook.extraction import (
     EBOOK_PAGE_PROMPT,
     EBOOK_PAGE_PROMPT_V5,
     EBOOK_PAGE_PROMPT_V5_R1,
+    EBOOK_PAGE_PROMPT_V5_R2,
     EBOOK_PAGE_SCHEMA,
     EBOOK_PAGE_SCHEMA_V5,
 )
@@ -20,13 +21,15 @@ def _span_schema() -> dict[str, object]:
 
 
 def test_v5_contract_is_explicitly_versioned_and_active() -> None:
-    """Milestone 1F-4r1 should keep schema v5 with prompt revision 5.1."""
-    assert EBOOK_PAGE_PROMPT.version == "5.1"
+    """Active page evidence should keep schema v5 with prompt revision 5.2."""
+    assert EBOOK_PAGE_PROMPT.version == "5.2"
     assert EBOOK_PAGE_SCHEMA.version == "5"
     assert EBOOK_PAGE_PROMPT_V5.name == "ebook_page_evidence"
     assert EBOOK_PAGE_PROMPT_V5.version == "5"
     assert EBOOK_PAGE_PROMPT_V5_R1.name == "ebook_page_evidence"
     assert EBOOK_PAGE_PROMPT_V5_R1.version == "5.1"
+    assert EBOOK_PAGE_PROMPT_V5_R2.name == "ebook_page_evidence"
+    assert EBOOK_PAGE_PROMPT_V5_R2.version == "5.2"
     assert EBOOK_PAGE_SCHEMA_V5.name == "ebook_page_evidence"
     assert EBOOK_PAGE_SCHEMA_V5.version == "5"
 
@@ -157,3 +160,14 @@ def test_v5_r1_prompt_keeps_scenario_label_role_stable() -> None:
 
     assert '"TÌNH HUỐNG" is scenario_label' in prompt
     assert "scenario_title for the specific scenario name" in prompt
+
+
+def test_v5_r2_prompt_preserves_page13_subtitle_and_footnote_boundaries() -> None:
+    """Page 13 title-like lines should remain separate and keep superscript refs."""
+    prompt = " ".join(EBOOK_PAGE_PROMPT_V5_R2.text.split())
+
+    assert "Do not merge adjacent standalone title/subtitle/label lines" in prompt
+    assert "heading_role_hint=subtitle" in prompt
+    assert "each carry their own superscript footnote marker" in prompt
+    assert "they MUST be separate blocks" in prompt
+    assert "vertical_position=superscript" in prompt

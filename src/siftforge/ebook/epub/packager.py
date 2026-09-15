@@ -293,11 +293,15 @@ def _collect_heading_nodes(
         if node_type == "heading":
             node_id = node.get("node_id")
             content = node.get("content")
+            role = node.get("role")
             if not isinstance(node_id, str) or not node_id:
                 raise EpubPackageError("semantic heading has invalid node_id")
-            label = _semantic_navigation_text(content).strip()
-            if label:
-                entries.append(EpubTocEntry(label=label, target_id=node_id))
+            if not isinstance(role, str):
+                raise EpubPackageError("semantic heading has invalid role")
+            if _heading_role_is_navigable(role):
+                label = _semantic_navigation_text(content).strip()
+                if label:
+                    entries.append(EpubTocEntry(label=label, target_id=node_id))
         children = node.get("children")
         if children is not None:
             if not isinstance(children, list):
@@ -305,6 +309,15 @@ def _collect_heading_nodes(
                     "semantic container children must be a list"
                 )
             _collect_heading_nodes(children, entries)
+
+
+def _heading_role_is_navigable(role: str) -> bool:
+    """Return whether one semantic heading role belongs in the EPUB TOC.
+
+    Supporting labels such as subtitles are rendered in the reading flow but do not
+    represent navigation hierarchy by themselves.
+    """
+    return role not in {"chapter_label", "subtitle", "genre_label"}
 
 
 def _semantic_navigation_text(value: Any) -> str:

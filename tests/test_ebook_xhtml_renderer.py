@@ -291,3 +291,44 @@ def test_renderer_copies_figure_assets(tmp_path: Path) -> None:
     xhtml = result.content_path.read_text(encoding="utf-8")
     assert 'src="../assets/figures/figure.png"' in xhtml
     assert "<figcaption>" in xhtml
+
+
+def test_renderer_keeps_subtitle_footnote_reference_clickable(tmp_path: Path) -> None:
+    """Subtitle-like body labels should retain noteref semantics outside the TOC."""
+    document = SemanticBookDocument(
+        title="Book",
+        language="vi",
+        author=None,
+        nodes=(
+            SemanticHeading(
+                node_id="subtitle-1",
+                content=(
+                    _inline("Thứ Sáu ngày 13"),
+                    _inline(
+                        "1",
+                        role=InlineRole.FOOTNOTE_REF,
+                        target_id="note-1",
+                        source_span_id="span-ref-1",
+                    ),
+                ),
+                role=HeadingRole.SUBTITLE,
+                level=None,
+            ),
+            SemanticFootnote(
+                node_id="note-1",
+                content=(_inline("Nội dung chú thích"),),
+                label="1",
+            ),
+        ),
+    )
+
+    result = EpubReadyXhtmlRenderer().render(
+        document,
+        asset_root=tmp_path,
+        output_root=tmp_path / "out",
+    )
+    xhtml = result.content_path.read_text(encoding="utf-8")
+
+    assert 'class="heading-label role-subtitle"' in xhtml
+    assert 'epub:type="noteref"' in xhtml
+    assert 'href="#note-1"' in xhtml
