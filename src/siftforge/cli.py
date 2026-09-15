@@ -29,6 +29,8 @@ from siftforge.ebook.pipeline import (
     EbookPDFBookEvidenceExtractionService,
     EbookPDFPageEvidenceExtractionService,
     EbookPDFPageExtractionService,
+    EbookPdfToEpubError,
+    EbookPdfToEpubService,
 )
 from siftforge.extraction.materializers import PDFPageMaterializationError
 from siftforge.extraction.providers import (
@@ -132,6 +134,120 @@ def build_parser() -> argparse.ArgumentParser:
         "--continue-on-error",
         action="store_true",
         help="Record failed pages and continue instead of stopping immediately.",
+    )
+
+
+    convert_pdf = ebook_actions.add_parser(
+        "convert-pdf",
+        help=(
+            "Resume full-PDF extraction and build a final EPUB in one command."
+        ),
+    )
+    convert_pdf.add_argument(
+        "--pdf",
+        required=True,
+        type=Path,
+        help="Path to the input scanned PDF.",
+    )
+    convert_pdf.add_argument(
+        "--model",
+        required=True,
+        help="Explicit Gemini model ID used for page extraction.",
+    )
+    convert_pdf.add_argument(
+        "--output",
+        required=True,
+        type=Path,
+        help="Destination final .epub file.",
+    )
+    convert_pdf.add_argument(
+        "--title",
+        required=True,
+        help="Book title used by semantic XHTML and EPUB metadata.",
+    )
+    convert_pdf.add_argument(
+        "--runs-root",
+        type=Path,
+        default=None,
+        help="Canonical page-run root. Defaults to runs/<pdf-stem>.",
+    )
+    convert_pdf.add_argument(
+        "--language",
+        default=None,
+        help="Optional BCP 47 book language, for example vi or en.",
+    )
+    convert_pdf.add_argument(
+        "--author",
+        default=None,
+        help="Optional book author metadata.",
+    )
+    convert_pdf.add_argument(
+        "--work-dir",
+        type=Path,
+        default=None,
+        help=(
+            "Derived-artifact workspace. Defaults to a sibling "
+            "<runs-root-name>-build directory."
+        ),
+    )
+    convert_pdf.add_argument(
+        "--force-extract",
+        action="store_true",
+        help="Re-extract every PDF page even when matching runs exist.",
+    )
+    convert_pdf.add_argument(
+        "--continue-on-error",
+        action="store_true",
+        help=(
+            "Continue page extraction after failures; skip final EPUB build "
+            "when any page still fails."
+        ),
+    )
+    convert_pdf.add_argument(
+        "--identifier",
+        default=None,
+        help="Optional publication identifier. Defaults to a stable UUID URN.",
+    )
+    convert_pdf.add_argument(
+        "--modified",
+        default=None,
+        help=(
+            "Optional EPUB UTC modified timestamp "
+            "(YYYY-MM-DDTHH:MM:SSZ)."
+        ),
+    )
+    convert_pdf.add_argument(
+        "--validate",
+        action="store_true",
+        help="Run EPUBCheck after packaging the EPUB.",
+    )
+    convert_pdf.add_argument(
+        "--epubcheck-jar",
+        type=Path,
+        default=None,
+        help=(
+            "EPUBCheck JAR used with --validate. Defaults to EPUBCHECK_JAR."
+        ),
+    )
+    convert_pdf.add_argument(
+        "--java-command",
+        default="java",
+        help="Java executable used for EPUBCheck. Defaults to java.",
+    )
+    convert_pdf.add_argument(
+        "--timeout",
+        type=float,
+        default=120.0,
+        help="EPUBCheck timeout in seconds. Defaults to 120.",
+    )
+    convert_pdf.add_argument(
+        "--epubcheck-report",
+        type=Path,
+        default=None,
+        help=(
+            "Optional EPUBCheck JSON report. With --validate, defaults to "
+            "<work-dir>/reports/epubcheck.json."
+        ),
     )
 
     assemble_book = ebook_actions.add_parser(
@@ -381,6 +497,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _run_ebook_extract_page(args)
     if args.domain == "ebook" and args.action == "extract-book":
         return _run_ebook_extract_book(args)
+    if args.domain == "ebook" and args.action == "convert-pdf":
+        return _run_ebook_convert_pdf(args)
     if args.domain == "ebook" and args.action == "assemble-book":
         return _run_ebook_assemble_book(args)
     if args.domain == "ebook" and args.action == "render-xhtml":
@@ -566,6 +684,117 @@ def _run_ebook_extract_book(args: argparse.Namespace) -> int:
         return 1
     print("result: resumable page extraction complete")
     return 0
+
+
+def _run_ebook_convert_pdf(args: argparse.Namespace) -> int:
+    """Resume full-PDF extraction, then build one complete EPUB."""
+    if not (os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")):
+        print(
+            "error: set GEMINI_API_KEY or GOOGLE_API_KEY before calling Gemini",
+            file=sys.stderr,
+        )
+        return 2
+
+    jar_value = args.epubcheck_jar
+    if args.validate and jar_value is None:
+        env_value = os.getenv("EPUBCHECK_JAR")
+        if env_value:
+            jar_value = Path(env_value)
+    if args.validate and jar_value is None:
+        print(
+            "error: --validate requires --epubcheck-jar or EPUBCHECK_JAR",
+            file=sys.stderr,
+        )
+        return 2
+    if not args.validate and args.epubcheck_report is not None:
+        print(
+            "error: --epubcheck-report requires --validate",
+            file=sys.stderr,
+        )
+        return 2
+
+    provider = GeminiProvider(
+        GeminiProviderConfig(
+            model=args.model,
+            temperature=0.0,
+        )
+    )
+    service = EbookPdfToEpubService(provider)
+
+    def print_progress(progress: EbookBookExtractionProgress) -> None:
+        """Print one compact extraction line per physical PDF page."""
+        result = progress.result
+        suffix = (
+            f" - {result.error_type}: {result.error_message}"
+            if result.error_message
+            else ""
+        )
+        print(
+            f"[{progress.completed}/{progress.total}] "
+            f"page {result.page_number:04d} {result.status.value}{suffix}"
+        )
+
+    try:
+        run = service.convert(
+            args.pdf.expanduser().resolve(),
+            args.output.expanduser().resolve(),
+            model=args.model,
+            title=args.title,
+            runs_root=args.runs_root,
+            language=args.language,
+            author=args.author,
+            work_dir=args.work_dir,
+            identifier=args.identifier,
+            modified=args.modified,
+            force_extract=args.force_extract,
+            continue_on_error=args.continue_on_error,
+            validate=args.validate,
+            epubcheck_jar=jar_value,
+            java_command=args.java_command,
+            timeout_seconds=args.timeout,
+            report_path=args.epubcheck_report,
+            progress_callback=print_progress,
+        )
+    except EbookPdfToEpubError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+
+    extraction = run.extraction
+    print(f"runs:       {run.runs_root}")
+    print(f"extracted:  {extraction.extracted_count}")
+    print(f"reused:     {extraction.reused_count}")
+    print(f"failed:     {extraction.failed_count}")
+    if extraction.total_usage:
+        total_tokens = extraction.total_usage.get("total_token_count")
+        if total_tokens is not None:
+            print(f"tokens:     {total_tokens}")
+    print(f"manifest:   {run.manifest_path}")
+
+    if run.build is None:
+        print("result:     extraction incomplete; EPUB build skipped")
+        return 1
+
+    build = run.build
+    print(f"pages:      {len(build.assembly.page_runs)}")
+    print(f"nodes:      {len(build.assembly.document.nodes)}")
+    print(f"figures:    {len(build.assembly.figure_assets)}")
+    print(f"epub:       {build.package.package.epub_path}")
+    if build.validation is None:
+        print("epubcheck:  skipped")
+        print("result:     PDF-to-EPUB conversion complete")
+        return 0
+
+    result = build.validation.result
+    print(f"epubcheck:  {'PASS' if result.passed else 'FAIL'}")
+    print(
+        "result:     "
+        + (
+            "PDF-to-EPUB conversion and validation complete"
+            if result.passed
+            else "EPUB built, but EPUBCheck failed"
+        )
+    )
+    return 0 if result.passed else 1
 
 
 def _run_ebook_assemble_book(args: argparse.Namespace) -> int:

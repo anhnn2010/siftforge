@@ -143,6 +143,39 @@ def test_extract_book_parser_accepts_resume_range_options() -> None:
     assert args.force is False
     assert args.continue_on_error is True
 
+
+def test_convert_pdf_parser_accepts_full_pipeline_options() -> None:
+    """One command should compose resumable extraction and EPUB building."""
+    parser = build_parser()
+    args = parser.parse_args(
+        [
+            "ebook",
+            "convert-pdf",
+            "--pdf",
+            "book.pdf",
+            "--model",
+            "gemini-3.6-flash",
+            "--output",
+            "dist/book.epub",
+            "--title",
+            "18 Năm Kim Cương",
+            "--runs-root",
+            "runs/book",
+            "--work-dir",
+            "runs/book-build",
+            "--continue-on-error",
+        ]
+    )
+
+    assert args.pdf == Path("book.pdf")
+    assert args.model == "gemini-3.6-flash"
+    assert args.output == Path("dist/book.epub")
+    assert args.title == "18 Năm Kim Cương"
+    assert args.runs_root == Path("runs/book")
+    assert args.work_dir == Path("runs/book-build")
+    assert args.force_extract is False
+    assert args.continue_on_error is True
+
 def test_assemble_book_parser_requires_runs_root_and_output() -> None:
     """Book assembly should be exposed as a provider-free ebook CLI action."""
     parser = build_parser()

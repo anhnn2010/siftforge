@@ -40,6 +40,11 @@ from .page_evidence_extraction import (
     EbookPDFPageEvidenceExtractionService,
 )
 from .page_extraction import EbookPageExtractionRun, EbookPDFPageExtractionService
+from .pdf_to_epub import (
+    EbookPdfToEpubError,
+    EbookPdfToEpubRun,
+    EbookPdfToEpubService,
+)
 
 __all__: list[str] = [
     "EbookBookExtractionError",
@@ -60,6 +65,9 @@ __all__: list[str] = [
     "EbookPDFPageExtractionService",
     "EbookPageEvidenceExtractionRun",
     "EbookPageExtractionRun",
+    "EbookPdfToEpubError",
+    "EbookPdfToEpubRun",
+    "EbookPdfToEpubService",
     "EbookEpubPackageError",
     "EbookEpubPackageRun",
     "EbookEpubPackageService",

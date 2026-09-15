@@ -1053,3 +1053,104 @@ siftforge ebook build-epub \
 This keeps the layer boundary intact: `extract-book` owns expensive page evidence,
 while `build-epub` owns deterministic book assembly, semantic projection, XHTML,
 EPUB packaging, and optional EPUBCheck validation.
+
+## Milestone 1G-7 - One-command complete PDF-to-EPUB conversion
+
+Milestone 1G-7 composes the resumable provider stage from 1G-6 with the
+provider-free EPUB build from 1G-5 while preserving their internal boundaries.
+The normal full-book workflow can now be invoked as one command:
+
+```bash
+siftforge ebook convert-pdf \
+  --pdf 18-nam-kim-cuong.pdf \
+  --model gemini-3.6-flash \
+  --output dist/18-nam-kim-cuong.epub \
+  --title "18 Năm Kim Cương" \
+  --language vi
+```
+
+The command is orchestration only. Internally the same isolated services still
+run in order:
+
+```text
+scanned PDF
+   ↓ resumable extract-book
+canonical page-* evidence runs
+   ↓ build-epub
+BookDocument → semantic XHTML → EPUB package
+   ↓ optional EPUBCheck
+final validation result
+```
+
+Existing page runs are reused only when 1G-6 confirms that the physical source
+page, source PDF hash, active prompt/schema revision, and requested model all
+match. Missing or stale pages are extracted before any provider-free book build
+begins.
+
+Unlike `build-epub`, `convert-pdf` always selects the **complete physical PDF**.
+This is an intentional full-book readiness gate: the command does not silently
+package a sparse test set as though it were the finished book. Page-range smoke
+tests remain available through `extract-book` followed by `build-epub`.
+
+If `--continue-on-error` is enabled, SiftForge can finish attempting later
+pages, but a final EPUB is **not** built while any selected physical page still
+has failed extraction:
+
+```text
+page 1      successful
+page 2      failed
+page 3..N   attempted
+       ↓
+conversion status = incomplete
+EPUB build          = skipped
+```
+
+Rerunning the same command resumes from the canonical page runs, so repaired
+provider/network failures do not require paying for already-valid pages again.
+`--force-extract` is available when the user intentionally wants every page to
+be refreshed.
+
+The default artifact layout remains transparent:
+
+```text
+runs/
+├── 18-nam-kim-cuong/
+│   ├── page-0001/
+│   ├── page-0002/
+│   ├── ...
+│   └── book-extraction.json
+└── 18-nam-kim-cuong-build/
+    ├── assembly/
+    ├── epub-ready/
+    ├── build-manifest.json
+    └── conversion-manifest.json
+
+dist/
+└── 18-nam-kim-cuong.epub
+```
+
+`conversion-manifest.json` records the extraction summary, aggregate provider
+usage, whether the build was attempted, the final EPUB path, and optional
+EPUBCheck status. This gives the one-command UX without hiding or merging the
+underlying pipeline stages.
+
+EPUBCheck can be included in the same invocation when configured:
+
+```bash
+siftforge ebook convert-pdf \
+  --pdf 18-nam-kim-cuong.pdf \
+  --model gemini-3.6-flash \
+  --output dist/18-nam-kim-cuong.epub \
+  --title "18 Năm Kim Cương" \
+  --language vi \
+  --validate \
+  --epubcheck-jar /path/to/epubcheck.jar
+```
+
+Exit status preserves the same distinction as the lower-level commands:
+
+- `0`: every page is ready and the EPUB was built; EPUBCheck also passed when
+  requested;
+- `1`: extraction completed with failed pages and packaging was skipped, or the
+  EPUB was built but EPUBCheck reported standards errors;
+- `2`: configuration/infrastructure/pipeline execution failed.
