@@ -24,8 +24,9 @@ from siftforge.ebook.pipeline.page_evidence_extraction import (
 )
 from siftforge.extraction.artifacts import FilesystemArtifactStore
 from siftforge.extraction.materializers import PDFPageMaterializer
-from siftforge.extraction.models import SourceRef
+from siftforge.extraction.models import Attempt, SourceRef
 from siftforge.extraction.providers import Extractor
+from siftforge.extraction.runtime import ExtractionRoutingError, FailureKind
 from siftforge.extraction.sources import PDFSource
 
 
@@ -49,6 +50,7 @@ class EbookBookPageExtractionResult:
     status: EbookBookPageStatus
     run_dir: Path
     usage: dict[str, int | float]
+    attempts: tuple[Attempt, ...] = ()
     error_type: str | None = None
     error_message: str | None = None
 
@@ -186,6 +188,7 @@ class EbookPDFBookEvidenceExtractionService:
                     status=EbookBookPageStatus.REUSED,
                     run_dir=run_dir,
                     usage=usage,
+                    attempts=_load_page_attempts(run_dir),
                 )
             else:
                 staging_dir = root / f".page-{page_number:04d}.extracting"
@@ -204,6 +207,11 @@ class EbookPDFBookEvidenceExtractionService:
                         status=EbookBookPageStatus.FAILED,
                         run_dir=run_dir,
                         usage={},
+                        attempts=(
+                            exc.attempts
+                            if isinstance(exc, ExtractionRoutingError)
+                            else ()
+                        ),
                         error_type=type(exc).__name__,
                         error_message=str(exc),
                     )
@@ -224,7 +232,7 @@ class EbookPDFBookEvidenceExtractionService:
                         completed=len(results),
                         total=total,
                     )
-                    if continue_on_error:
+                    if continue_on_error and not _routing_failure_stops_run(exc):
                         continue
                     raise EbookBookExtractionError(
                         f"page {page_number} extraction failed: {exc}; "
@@ -237,6 +245,7 @@ class EbookPDFBookEvidenceExtractionService:
                     status=EbookBookPageStatus.EXTRACTED,
                     run_dir=run_dir,
                     usage=usage,
+                    attempts=_load_page_attempts(run_dir),
                 )
 
             results.append(result)
@@ -395,12 +404,16 @@ class EbookPDFBookEvidenceExtractionService:
             },
             "summary": _summary(results, selected_count=len(selected)),
             "usage": _aggregate_usage(results),
+            "routing": _routing_summary(results),
             "pages": [
                 {
                     "page_number": item.page_number,
                     "status": item.status.value,
                     "run_dir": item.run_dir.relative_to(root).as_posix(),
                     "usage": item.usage,
+                    "attempts": [
+                        _attempt_to_dict(attempt) for attempt in item.attempts
+                    ],
                     "error_type": item.error_type,
                     "error_message": item.error_message,
                 }
@@ -429,6 +442,20 @@ class EbookPDFBookEvidenceExtractionService:
                 result=result,
             )
         )
+
+
+def _routing_failure_stops_run(error: Exception) -> bool:
+    """Return whether a routing failure is likely to affect every later page."""
+    if not isinstance(error, ExtractionRoutingError) or not error.attempts:
+        return False
+    terminal_reasons = {
+        FailureKind.QUOTA_EXHAUSTED.value,
+        FailureKind.AUTHENTICATION.value,
+        FailureKind.PERMISSION.value,
+        FailureKind.INVALID_REQUEST.value,
+        FailureKind.CONFIGURATION.value,
+    }
+    return error.attempts[-1].reason in terminal_reasons
 
 
 def _source_page_number(source_ref: SourceRef) -> int:
@@ -496,6 +523,83 @@ def _successful_model(manifest: dict[str, Any]) -> str | None:
         if isinstance(model, str) and model:
             return model
     return None
+
+
+def _load_page_attempts(run_dir: Path) -> tuple[Attempt, ...]:
+    """Load persisted extraction attempt provenance from one page manifest."""
+    try:
+        manifest = _load_json_object(run_dir / "manifest.json")
+    except (OSError, ValueError, json.JSONDecodeError):
+        return ()
+    payload = manifest.get("attempts")
+    if not isinstance(payload, list):
+        return ()
+
+    attempts: list[Attempt] = []
+    for item in payload:
+        if not isinstance(item, dict):
+            continue
+        mechanism = item.get("mechanism")
+        provider = item.get("provider")
+        status = item.get("status")
+        reason = item.get("reason")
+        metadata = item.get("metadata")
+        if not isinstance(mechanism, str) or not isinstance(status, str):
+            continue
+        if provider is not None and not isinstance(provider, str):
+            provider = None
+        if reason is not None and not isinstance(reason, str):
+            reason = None
+        attempts.append(
+            Attempt(
+                mechanism=mechanism,
+                provider=provider,
+                status=status,
+                reason=reason,
+                metadata=metadata if isinstance(metadata, dict) else {},
+            )
+        )
+    return tuple(attempts)
+
+
+def _attempt_to_dict(attempt: Attempt) -> dict[str, Any]:
+    """Serialize one attempt for the book-level checkpoint manifest."""
+    return {
+        "mechanism": attempt.mechanism,
+        "provider": attempt.provider,
+        "status": attempt.status,
+        "reason": attempt.reason,
+        "metadata": attempt.metadata,
+    }
+
+
+def _routing_summary(
+    results: Sequence[EbookBookPageExtractionResult],
+) -> dict[str, Any]:
+    """Summarize fresh route attempts without recounting reused historical calls."""
+    profiles: dict[str, dict[str, int]] = {}
+    failed_reasons: dict[str, int] = {}
+    for result in results:
+        if result.status is EbookBookPageStatus.REUSED:
+            continue
+        for attempt in result.attempts:
+            metadata = attempt.metadata
+            profile_value = metadata.get("profile", metadata.get("route", "unknown"))
+            profile = profile_value if isinstance(profile_value, str) else "unknown"
+            counters = profiles.setdefault(
+                profile,
+                {"success": 0, "failed": 0},
+            )
+            if attempt.status == "success":
+                counters["success"] += 1
+            elif attempt.status == "failed":
+                counters["failed"] += 1
+                reason = attempt.reason or "unknown"
+                failed_reasons[reason] = failed_reasons.get(reason, 0) + 1
+    return {
+        "profiles": profiles,
+        "failed_reasons": failed_reasons,
+    }
 
 
 def _load_page_usage(run_dir: Path) -> dict[str, int | float]:

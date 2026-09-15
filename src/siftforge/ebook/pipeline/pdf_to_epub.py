@@ -10,7 +10,6 @@ from siftforge.extraction.providers import Extractor
 
 from .book_extraction import (
     EbookBookExtractionError,
-    EbookBookExtractionProgress,
     EbookBookExtractionRun,
     EbookPDFBookEvidenceExtractionService,
     ProgressCallback,

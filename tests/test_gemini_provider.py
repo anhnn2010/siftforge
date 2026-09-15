@@ -97,7 +97,11 @@ def test_gemini_provider_passes_explicit_typography_schema(
     )
     transport = FakeGeminiTransport(response_text)
     provider = GeminiProvider(
-        GeminiProviderConfig(model="test-model"),
+        GeminiProviderConfig(
+            model="test-model",
+            profile_name="gemini-free",
+            cost_tier="free",
+        ),
         transport=transport,
     )
 
@@ -107,6 +111,8 @@ def test_gemini_provider_passes_explicit_typography_schema(
     assert typography["posture"] == "roman"
     assert result.attempts[0].metadata["prompt_version"] == "4"
     assert result.attempts[0].metadata["schema_version"] == "4"
+    assert result.attempts[0].metadata["profile"] == "gemini-free"
+    assert result.attempts[0].metadata["cost_tier"] == "free"
 
     assert transport.last_call is not None
     assert (

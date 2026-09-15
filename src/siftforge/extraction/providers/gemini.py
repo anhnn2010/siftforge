@@ -26,6 +26,22 @@ class InvalidGeminiResponseError(GeminiProviderError):
     """Raised when Gemini does not return valid JSON for a structured task."""
 
 
+class GeminiRequestError(GeminiProviderError):
+    """Normalized transport error raised by the Google Gemini SDK boundary."""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        status_code: int | None = None,
+        retry_after_seconds: float | None = None,
+    ) -> None:
+        """Store routing-relevant request metadata without provider secrets."""
+        super().__init__(message)
+        self.status_code = status_code
+        self.retry_after_seconds = retry_after_seconds
+
+
 @dataclass(frozen=True, slots=True)
 class GeminiProviderConfig:
     """Configuration for one Gemini extraction mechanism.
@@ -35,11 +51,15 @@ class GeminiProviderConfig:
         temperature: Generation temperature. Extraction defaults to deterministic.
         api_key: Optional API key. When omitted, the Google SDK may use its normal
             environment-based credential discovery.
+        profile_name: Safe route/profile label persisted in attempt provenance.
+        cost_tier: Safe cost classification such as ``free`` or ``paid``.
     """
 
     model: str
     temperature: float = 0.0
     api_key: str | None = field(default=None, repr=False)
+    profile_name: str = "default"
+    cost_tier: str = "unspecified"
 
 
 @dataclass(frozen=True, slots=True)
@@ -76,7 +96,8 @@ class GeminiProvider:
     Args:
         config: Explicit provider/model configuration.
         transport: Optional injected transport used by tests or alternative clients.
-            When omitted, the official `google-genai` SDK transport is created lazily.
+            When omitted, the official ``google-genai`` SDK transport is created
+            lazily.
     """
 
     def __init__(
@@ -103,6 +124,7 @@ class GeminiProvider:
         Raises:
             MissingMaterializedAssetError: If the task has no local input asset.
             InvalidGeminiResponseError: If Gemini returns empty or malformed JSON.
+            GeminiRequestError: If the Gemini SDK request fails.
         """
         if not task.assets:
             raise MissingMaterializedAssetError(
@@ -139,6 +161,8 @@ class GeminiProvider:
                     metadata={
                         "model": self._config.model,
                         "temperature": self._config.temperature,
+                        "profile": self._config.profile_name,
+                        "cost_tier": self._config.cost_tier,
                         "prompt_name": task.prompt.name,
                         "prompt_version": task.prompt.version,
                         "schema_name": task.schema.name,
@@ -167,7 +191,7 @@ class _GoogleGenAITransport:
         response_json_schema: dict[str, Any],
         temperature: float,
     ) -> GeminiTransportResponse:
-        """Call `google-genai` with inline local assets and JSON structured output."""
+        """Call ``google-genai`` with local assets and JSON structured output."""
         try:
             from google import genai
             from google.genai import types
@@ -192,19 +216,73 @@ class _GoogleGenAITransport:
             for asset in assets
         )
 
-        response = self._client.models.generate_content(
-            model=model,
-            contents=parts,
-            config=types.GenerateContentConfig(
-                response_mime_type="application/json",
-                response_json_schema=response_json_schema,
-                temperature=temperature,
-            ),
-        )
+        try:
+            response = self._client.models.generate_content(
+                model=model,
+                contents=parts,
+                config=types.GenerateContentConfig(
+                    response_mime_type="application/json",
+                    response_json_schema=response_json_schema,
+                    temperature=temperature,
+                ),
+            )
+        except Exception as exc:
+            raise _normalize_request_error(exc) from exc
 
         text: str = response.text or ""
         usage: dict[str, int | float | str | None] = _extract_usage(response)
         return GeminiTransportResponse(text=text, usage=usage)
+
+
+def _normalize_request_error(error: Exception) -> GeminiRequestError:
+    """Normalize common SDK exception metadata for provider-agnostic routing."""
+    status_code = _status_code(error)
+    retry_after = _retry_after_seconds(error)
+    message = str(error).strip() or type(error).__name__
+    return GeminiRequestError(
+        message,
+        status_code=status_code,
+        retry_after_seconds=retry_after,
+    )
+
+
+def _status_code(error: Exception) -> int | None:
+    """Best-effort extraction of an HTTP status code from SDK exceptions."""
+    for value in (
+        getattr(error, "status_code", None),
+        getattr(error, "code", None),
+    ):
+        if isinstance(value, int) and not isinstance(value, bool):
+            return value
+
+    response: Any = getattr(error, "response", None)
+    value = getattr(response, "status_code", None)
+    if isinstance(value, int) and not isinstance(value, bool):
+        return value
+    return None
+
+
+def _retry_after_seconds(error: Exception) -> float | None:
+    """Best-effort extraction of a provider retry hint from SDK exceptions."""
+    value = getattr(error, "retry_after_seconds", None)
+    if isinstance(value, (int, float)) and not isinstance(value, bool) and value >= 0:
+        return float(value)
+
+    response: Any = getattr(error, "response", None)
+    headers: Any = getattr(response, "headers", None)
+    if headers is None:
+        return None
+    try:
+        raw_value: Any = headers.get("retry-after")
+    except AttributeError:
+        return None
+    if isinstance(raw_value, str):
+        try:
+            parsed = float(raw_value)
+        except ValueError:
+            return None
+        return parsed if parsed >= 0 else None
+    return None
 
 
 def _extract_usage(response: Any) -> dict[str, int | float | str | None]:

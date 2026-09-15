@@ -1154,3 +1154,60 @@ Exit status preserves the same distinction as the lower-level commands:
 - `1`: extraction completed with failed pages and packaging was skipped, or the
   EPUB was built but EPUBCheck reported standards errors;
 - `2`: configuration/infrastructure/pipeline execution failed.
+
+## Milestone 1H-1 - Free-first Gemini routing
+
+SiftForge can now keep the existing Gemini page-extraction contract while routing
+credential profiles by cost. The ebook domain still submits the same image,
+prompt 5.2, and schema v5; routing is a generic extraction-runtime concern.
+
+Configure a free Gemini profile separately from an optional paid fallback:
+
+```bash
+export SIFTFORGE_GEMINI_FREE_API_KEY="..."
+export SIFTFORGE_GEMINI_PAID_API_KEY="..."  # optional
+```
+
+The safe default is `free-only`:
+
+```bash
+siftforge ebook extract-book \
+  --pdf 18-nam-kim-cuong.pdf \
+  --model gemini-3.6-flash \
+  --runs-root runs/18-nam-kim-cuong
+```
+
+A configured paid key is never used in this mode. When finishing immediately is
+more important than waiting for free capacity to return, paid fallback must be
+explicitly enabled:
+
+```bash
+siftforge ebook extract-book \
+  --pdf 18-nam-kim-cuong.pdf \
+  --model gemini-3.6-flash \
+  --runs-root runs/18-nam-kim-cuong \
+  --routing-policy free-then-paid
+```
+
+The current free profile receives up to three calls for retryable failures before
+routing moves on. Transient server failures, short-term rate limits, malformed
+structured JSON, daily quota exhaustion, authentication/permission failures, and
+invalid requests are classified separately. Paid routing is skipped for failures
+that another credential cannot repair, such as a task-level invalid request.
+
+Successful page manifests preserve the complete attempt chain, including failed
+free attempts before a successful fallback. Failed whole-book pages also retain
+safe attempt provenance in `book-extraction.json`; API keys are never persisted.
+The book checkpoint includes a fresh-run routing summary grouped by profile and
+failure reason.
+
+Existing `GEMINI_API_KEY` / `GOOGLE_API_KEY` usage remains supported as a legacy
+single-profile path. Multiple alternative free models are intentionally not
+activated yet: each candidate model should first pass the existing golden ebook
+regression set before it can join the free route pool.
+
+Run-level failures such as exhausted daily free quota, invalid credentials,
+permission errors, or invalid requests stop whole-book extraction even when
+`--continue-on-error` is set. This prevents a known bad credential/quota state
+from causing hundreds of pointless page requests; the checkpoint remains safe to
+resume later with the same command.

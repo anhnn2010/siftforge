@@ -34,9 +34,18 @@ from siftforge.ebook.pipeline import (
 )
 from siftforge.extraction.materializers import PDFPageMaterializationError
 from siftforge.extraction.providers import (
+    Extractor,
     GeminiProvider,
     GeminiProviderConfig,
     GeminiProviderError,
+)
+from siftforge.extraction.runtime import (
+    CostTier,
+    ExtractionRoute,
+    ExtractionRoutingError,
+    FreeFirstRouter,
+    GeminiFailureClassifier,
+    RoutingPolicy,
 )
 
 
@@ -87,6 +96,7 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Artifact directory. Defaults to runs/<pdf-stem>/page-NNNN.",
     )
+    _add_gemini_routing_arguments(extract_page)
 
     extract_book = ebook_actions.add_parser(
         "extract-book",
@@ -135,6 +145,7 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Record failed pages and continue instead of stopping immediately.",
     )
+    _add_gemini_routing_arguments(extract_book)
 
 
     convert_pdf = ebook_actions.add_parser(
@@ -249,6 +260,7 @@ def build_parser() -> argparse.ArgumentParser:
             "<work-dir>/reports/epubcheck.json."
         ),
     )
+    _add_gemini_routing_arguments(convert_pdf)
 
     assemble_book = ebook_actions.add_parser(
         "assemble-book",
@@ -481,6 +493,22 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _add_gemini_routing_arguments(parser: argparse.ArgumentParser) -> None:
+    """Add shared free-first Gemini routing controls to one AI command."""
+    parser.add_argument(
+        "--routing-policy",
+        choices=(
+            RoutingPolicy.FREE_ONLY.value,
+            RoutingPolicy.FREE_THEN_PAID.value,
+        ),
+        default=RoutingPolicy.FREE_ONLY.value,
+        help=(
+            "Gemini credential routing policy. free-only never uses the paid "
+            "profile; free-then-paid allows paid fallback after free retries."
+        ),
+    )
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     """Run the SiftForge command-line interface.
 
@@ -516,15 +544,104 @@ def main(argv: Sequence[str] | None = None) -> int:
     return 2
 
 
+def _build_gemini_extractor(
+    *,
+    model: str,
+    routing_policy: RoutingPolicy,
+) -> Extractor:
+    """Build free-first Gemini routes from environment credential profiles."""
+    free_key = os.getenv("SIFTFORGE_GEMINI_FREE_API_KEY")
+    paid_key = os.getenv("SIFTFORGE_GEMINI_PAID_API_KEY")
+    legacy_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
+
+    if free_key:
+        classifier = GeminiFailureClassifier()
+        routes: list[ExtractionRoute] = [
+            ExtractionRoute(
+                name="gemini-free",
+                extractor=GeminiProvider(
+                    GeminiProviderConfig(
+                        model=model,
+                        temperature=0.0,
+                        api_key=free_key,
+                        profile_name="gemini-free",
+                        cost_tier=CostTier.FREE.value,
+                    )
+                ),
+                classifier=classifier,
+                provider="gemini",
+                cost_tier=CostTier.FREE,
+                max_attempts=3,
+            )
+        ]
+        if paid_key:
+            routes.append(
+                ExtractionRoute(
+                    name="gemini-paid",
+                    extractor=GeminiProvider(
+                        GeminiProviderConfig(
+                            model=model,
+                            temperature=0.0,
+                            api_key=paid_key,
+                            profile_name="gemini-paid",
+                            cost_tier=CostTier.PAID.value,
+                        )
+                    ),
+                    classifier=classifier,
+                    provider="gemini",
+                    cost_tier=CostTier.PAID,
+                    max_attempts=2,
+                )
+            )
+        return FreeFirstRouter(routes, policy=routing_policy)
+
+    if paid_key:
+        if routing_policy is RoutingPolicy.FREE_ONLY:
+            raise ValueError(
+                "free-only routing requires SIFTFORGE_GEMINI_FREE_API_KEY; "
+                "the configured paid key was not used"
+            )
+        return FreeFirstRouter(
+            (
+                ExtractionRoute(
+                    name="gemini-paid",
+                    extractor=GeminiProvider(
+                        GeminiProviderConfig(
+                            model=model,
+                            temperature=0.0,
+                            api_key=paid_key,
+                            profile_name="gemini-paid",
+                            cost_tier=CostTier.PAID.value,
+                        )
+                    ),
+                    classifier=GeminiFailureClassifier(),
+                    provider="gemini",
+                    cost_tier=CostTier.PAID,
+                    max_attempts=2,
+                ),
+            ),
+            policy=routing_policy,
+        )
+
+    if legacy_key:
+        return GeminiProvider(
+            GeminiProviderConfig(
+                model=model,
+                temperature=0.0,
+                api_key=legacy_key,
+                profile_name="legacy",
+                cost_tier=CostTier.UNSPECIFIED.value,
+            )
+        )
+
+    raise ValueError(
+        "set SIFTFORGE_GEMINI_FREE_API_KEY for free-first routing, or "
+        "GEMINI_API_KEY/GOOGLE_API_KEY for legacy single-profile Gemini"
+    )
+
+
 def _run_ebook_extract_page(args: argparse.Namespace) -> int:
     """Execute one-page Gemini extraction using the selected ebook contract."""
-    if not (os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")):
-        print(
-            "error: set GEMINI_API_KEY or GOOGLE_API_KEY before calling Gemini",
-            file=sys.stderr,
-        )
-        return 2
-
     pdf_path = args.pdf.expanduser().resolve()
     run_dir = (
         args.run_dir.expanduser().resolve()
@@ -537,14 +654,11 @@ def _run_ebook_extract_page(args: argparse.Namespace) -> int:
         ).resolve()
     )
 
-    provider = GeminiProvider(
-        GeminiProviderConfig(
-            model=args.model,
-            temperature=0.0,
-        )
-    )
-
     try:
+        provider = _build_gemini_extractor(
+            model=args.model,
+            routing_policy=RoutingPolicy(args.routing_policy),
+        )
         if args.contract_version == "4":
             return _run_ebook_extract_page_v4(
                 provider=provider,
@@ -563,6 +677,7 @@ def _run_ebook_extract_page(args: argparse.Namespace) -> int:
         ValueError,
         PDFPageMaterializationError,
         GeminiProviderError,
+        ExtractionRoutingError,
         EbookPageNormalizationError,
     ) as exc:
         print(f"error: {exc}", file=sys.stderr)
@@ -571,7 +686,7 @@ def _run_ebook_extract_page(args: argparse.Namespace) -> int:
 
 def _run_ebook_extract_page_v5(
     *,
-    provider: GeminiProvider,
+    provider: Extractor,
     pdf_path: Path,
     page_number: int,
     run_dir: Path,
@@ -596,7 +711,7 @@ def _run_ebook_extract_page_v5(
 
 def _run_ebook_extract_page_v4(
     *,
-    provider: GeminiProvider,
+    provider: Extractor,
     pdf_path: Path,
     page_number: int,
     run_dir: Path,
@@ -621,25 +736,20 @@ def _run_ebook_extract_page_v4(
 
 def _run_ebook_extract_book(args: argparse.Namespace) -> int:
     """Extract a PDF page range with resumable canonical v5 page runs."""
-    if not (os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")):
-        print(
-            "error: set GEMINI_API_KEY or GOOGLE_API_KEY before calling Gemini",
-            file=sys.stderr,
-        )
-        return 2
-
     pdf_path = args.pdf.expanduser().resolve()
     runs_root = (
         args.runs_root.expanduser().resolve()
         if args.runs_root is not None
         else (Path.cwd() / "runs" / pdf_path.stem).resolve()
     )
-    provider = GeminiProvider(
-        GeminiProviderConfig(
+    try:
+        provider = _build_gemini_extractor(
             model=args.model,
-            temperature=0.0,
+            routing_policy=RoutingPolicy(args.routing_policy),
         )
-    )
+    except ValueError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
     service = EbookPDFBookEvidenceExtractionService(provider)
 
     def print_progress(progress: EbookBookExtractionProgress) -> None:
@@ -688,13 +798,6 @@ def _run_ebook_extract_book(args: argparse.Namespace) -> int:
 
 def _run_ebook_convert_pdf(args: argparse.Namespace) -> int:
     """Resume full-PDF extraction, then build one complete EPUB."""
-    if not (os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")):
-        print(
-            "error: set GEMINI_API_KEY or GOOGLE_API_KEY before calling Gemini",
-            file=sys.stderr,
-        )
-        return 2
-
     jar_value = args.epubcheck_jar
     if args.validate and jar_value is None:
         env_value = os.getenv("EPUBCHECK_JAR")
@@ -713,12 +816,14 @@ def _run_ebook_convert_pdf(args: argparse.Namespace) -> int:
         )
         return 2
 
-    provider = GeminiProvider(
-        GeminiProviderConfig(
+    try:
+        provider = _build_gemini_extractor(
             model=args.model,
-            temperature=0.0,
+            routing_policy=RoutingPolicy(args.routing_policy),
         )
-    )
+    except ValueError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
     service = EbookPdfToEpubService(provider)
 
     def print_progress(progress: EbookBookExtractionProgress) -> None:

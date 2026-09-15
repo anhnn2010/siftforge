@@ -314,3 +314,61 @@ def test_failed_refresh_preserves_previous_canonical_run(tmp_path: Path) -> None
     assert (runs / "page-0001" / "manifest.json").read_bytes() == original
     assert not (runs / ".page-0001.extracting").exists()
     assert not (runs / ".page-0001.backup").exists()
+
+
+def test_continue_on_error_stops_after_run_level_free_quota_exhaustion(
+    tmp_path: Path,
+) -> None:
+    """Daily free quota exhaustion should checkpoint instead of storming later pages."""
+    from siftforge.extraction.runtime import ExtractionRoutingError
+
+    class QuotaExtractor:
+        """Simulate one free profile whose daily quota is exhausted."""
+
+        def __init__(self) -> None:
+            self.calls: list[int] = []
+
+        def extract(self, task: ExtractionTask) -> ExtractionResult:
+            """Raise one sanitized routing error for every attempted page."""
+            page_number = task.source.metadata["page_number"]
+            assert isinstance(page_number, int)
+            self.calls.append(page_number)
+            attempt = Attempt(
+                mechanism="ai",
+                provider="gemini",
+                status="failed",
+                reason="quota_exhausted",
+                metadata={
+                    "route": "gemini-free",
+                    "cost_tier": "free",
+                    "attempt_number": 1,
+                    "max_attempts": 3,
+                },
+            )
+            cause = RuntimeError("fixture quota")
+            raise ExtractionRoutingError(
+                "free quota exhausted",
+                attempts=(attempt,),
+                last_error=cause,
+            ) from cause
+
+    pdf = tmp_path / "book.pdf"
+    _make_image_pdf(pdf, 3)
+    runs = tmp_path / "runs"
+    extractor = QuotaExtractor()
+
+    with pytest.raises(EbookBookExtractionError, match="resume by rerunning"):
+        EbookPDFBookEvidenceExtractionService(extractor).extract_book(
+            pdf,
+            runs,
+            model="fixture-model",
+            continue_on_error=True,
+        )
+
+    assert extractor.calls == [1]
+    checkpoint = json.loads(
+        (runs / "book-extraction.json").read_text(encoding="utf-8")
+    )
+    assert checkpoint["summary"]["completed"] == 1
+    assert checkpoint["summary"]["remaining"] == 2
+    assert checkpoint["routing"]["failed_reasons"] == {"quota_exhausted": 1}

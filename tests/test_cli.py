@@ -14,6 +14,8 @@ def test_extract_page_requires_gemini_api_key(
 ) -> None:
     """CLI should fail before network access when no API key is configured."""
     del tmp_path
+    monkeypatch.delenv("SIFTFORGE_GEMINI_FREE_API_KEY", raising=False)
+    monkeypatch.delenv("SIFTFORGE_GEMINI_PAID_API_KEY", raising=False)
     monkeypatch.delenv("GEMINI_API_KEY", raising=False)
     monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
 
@@ -50,6 +52,44 @@ def test_extract_page_defaults_to_v5_contract() -> None:
     )
 
     assert args.contract_version == "5"
+
+
+def test_extract_page_defaults_to_free_only_routing() -> None:
+    """Paid fallback should require explicit opt-in on AI extraction commands."""
+    parser = build_parser()
+    args = parser.parse_args(
+        [
+            "ebook",
+            "extract-page",
+            "--pdf",
+            "book.pdf",
+            "--page",
+            "18",
+            "--model",
+            "gemini-3.6-flash",
+        ]
+    )
+
+    assert args.routing_policy == "free-only"
+
+
+def test_extract_book_accepts_explicit_paid_fallback_policy() -> None:
+    """Whole-book extraction should expose explicit paid fallback opt-in."""
+    parser = build_parser()
+    args = parser.parse_args(
+        [
+            "ebook",
+            "extract-book",
+            "--pdf",
+            "book.pdf",
+            "--model",
+            "gemini-3.6-flash",
+            "--routing-policy",
+            "free-then-paid",
+        ]
+    )
+
+    assert args.routing_policy == "free-then-paid"
 
 
 def test_extract_page_allows_explicit_v4_regression_contract() -> None:
