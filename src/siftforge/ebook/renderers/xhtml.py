@@ -414,11 +414,8 @@ def _semantic_content_names(
 
     counters: dict[str, int] = {}
     names: list[str] = []
-    for index, chunk in enumerate(chunks, start=1):
-        stem = _chunk_filename_stem(chunk)
-        if stem is None:
-            names.append(f"section-{index:04d}.xhtml")
-            continue
+    for chunk in chunks:
+        stem = _chunk_filename_stem(chunk) or "section"
         counters[stem] = counters.get(stem, 0) + 1
         names.append(f"{stem}-{counters[stem]:04d}.xhtml")
     return tuple(names)

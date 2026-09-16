@@ -554,3 +554,40 @@ def test_renderer_groups_title_and_subtitles_with_hgroup(tmp_path: Path) -> None
     assert '<h1 id="chapter-title" class="role-chapter-title">' in xhtml
     assert '<p id="subtitle-1" class="heading-label role-subtitle">' in xhtml
     assert '<p id="subtitle-2" class="heading-label role-subtitle">' in xhtml
+
+
+def test_renderer_avoids_fallback_and_semantic_section_filename_collision(
+    tmp_path: Path,
+) -> None:
+    """Fallback body chunks must not collide with semantic section filenames."""
+    document = SemanticBookDocument(
+        title="Book",
+        language="vi",
+        author=None,
+        nodes=(
+            SemanticParagraph(
+                node_id="opening",
+                content=(_inline("Opening text."),),
+            ),
+            SemanticHeading(
+                node_id="section-title",
+                content=(_inline("Section title"),),
+                role=HeadingRole.SECTION_TITLE,
+                level=1,
+            ),
+            SemanticParagraph(
+                node_id="section-body",
+                content=(_inline("Section body."),),
+            ),
+        ),
+    )
+
+    result = EpubReadyXhtmlRenderer().render(
+        document,
+        asset_root=tmp_path,
+        output_root=tmp_path / "out",
+    )
+
+    names = [path.name for path in result.content_paths]
+    assert names == ["section-0001.xhtml", "section-0002.xhtml"]
+    assert len(names) == len(set(names))
