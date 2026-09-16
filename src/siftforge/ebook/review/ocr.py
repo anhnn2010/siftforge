@@ -33,6 +33,17 @@ class TesseractOcrEngine:
         """Initialize the engine with an explicit or default configuration."""
         self._config = config or TesseractOcrConfig()
 
+    def cache_key(self) -> str:
+        """Return a stable key for review-cache compatibility checks."""
+        config = self._config
+        return (
+            "tesseract"
+            f"|command={config.command}"
+            f"|language={config.language}"
+            f"|psm={config.page_segmentation_mode}"
+            f"|minimum_confidence={config.minimum_confidence:g}"
+        )
+
     def extract(self, image_path: str | Path) -> OcrPage:
         """Extract one page image as plain review text plus OCR word boxes."""
         image = Path(image_path).expanduser().resolve()

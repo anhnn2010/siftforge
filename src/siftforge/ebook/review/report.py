@@ -7,7 +7,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from .models import PageReviewResult, ReviewFinding
+from .models import TEXT_REVIEW_MODEL, PageReviewResult, ReviewFinding
 
 
 def write_review_artifacts(
@@ -67,7 +67,7 @@ def _summary_payload(pages: tuple[PageReviewResult, ...]) -> dict[str, Any]:
         finding for page in pages for finding in page.suppressed_findings
     ]
     return {
-        "review_model": "TextFidelityReview-v3",
+        "review_model": TEXT_REVIEW_MODEL,
         "pages_reviewed": len(pages),
         "pages_with_findings": sum(bool(page.findings) for page in pages),
         "findings_total": len(findings),

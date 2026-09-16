@@ -6,6 +6,8 @@ from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
 
+TEXT_REVIEW_MODEL = "TextFidelityReview-v4"
+
 
 class ReviewSource(StrEnum):
     """Independent signal that produced one review finding."""
@@ -123,6 +125,9 @@ class TextReviewRun:
     pages: tuple[PageReviewResult, ...]
     report_path: Path
     summary_path: Path
+    manifest_path: Path | None = None
+    processed_pages: int = 0
+    reused_pages: int = 0
 
     @property
     def finding_count(self) -> int:

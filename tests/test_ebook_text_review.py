@@ -553,3 +553,128 @@ def test_review_status_strict_gate_rejects_unresolved_findings(
 
     with pytest.raises(ReviewStatusError, match="needs_review=1"):
         service.require_complete(tmp_path)
+
+class _CountingOcr(_FakeOcr):
+    """Expose how often local OCR actually runs for incremental review tests."""
+
+    def __init__(self) -> None:
+        """Start with no OCR invocations."""
+        self.calls = 0
+
+    def cache_key(self) -> str:
+        """Return a deterministic fake OCR configuration key."""
+        return "fake-ocr|vie|v1"
+
+    def extract(self, image_path: str | Path) -> OcrPage:
+        """Count the OCR execution before returning deterministic evidence."""
+        self.calls += 1
+        return super().extract(image_path)
+
+
+def _cache_page_run(tmp_path: Path) -> EbookPageRunArtifact:
+    """Create a page run with canonical artifacts suitable for cache tests."""
+    run_dir = tmp_path / "page-0013"
+    normalized = run_dir / "normalized"
+    normalized.mkdir(parents=True)
+    (normalized / "page.json").write_text(
+        '{"page":"stable-review-input"}\n',
+        encoding="utf-8",
+    )
+    source_image = run_dir / "assets" / "page-0013.jpg"
+    source_image.parent.mkdir(parents=True)
+    Image.new("RGB", (200, 120), "white").save(source_image)
+    return EbookPageRunArtifact(
+        run_dir=run_dir,
+        page_number=13,
+        page=_page("3 giờ sáng ngày14 tháng 12"),
+        source_image=source_image,
+        source_media_type="image/jpeg",
+    )
+
+
+def test_review_reuses_current_page_artifacts_without_rerunning_ocr(
+    tmp_path: Path,
+) -> None:
+    """A second identical review should regenerate reports from cached evidence."""
+    page_run = _cache_page_run(tmp_path)
+    ocr = _CountingOcr()
+    service = EbookTextReviewService(
+        ocr,
+        loader=_FakeLoader(page_run),  # type: ignore[arg-type]
+    )
+    output = tmp_path / "review"
+
+    first = service.review(tmp_path, output)
+    second = service.review(tmp_path, output)
+
+    assert ocr.calls == 1
+    assert first.processed_pages == 1
+    assert first.reused_pages == 0
+    assert second.processed_pages == 0
+    assert second.reused_pages == 1
+    assert second.finding_count == first.finding_count
+    assert second.report_path.is_file()
+    assert second.manifest_path is not None
+    manifest = json.loads(second.manifest_path.read_text(encoding="utf-8"))
+    assert manifest["processed_pages"] == 0
+    assert manifest["reused_pages"] == 1
+
+
+def test_review_force_bypasses_current_page_cache(tmp_path: Path) -> None:
+    """Explicit force mode should rerun OCR even when fingerprints still match."""
+    page_run = _cache_page_run(tmp_path)
+    ocr = _CountingOcr()
+    service = EbookTextReviewService(
+        ocr,
+        loader=_FakeLoader(page_run),  # type: ignore[arg-type]
+    )
+    output = tmp_path / "review"
+
+    service.review(tmp_path, output)
+    forced = service.review(tmp_path, output, force=True)
+
+    assert ocr.calls == 2
+    assert forced.processed_pages == 1
+    assert forced.reused_pages == 0
+
+
+def test_review_cache_invalidates_when_source_image_changes(tmp_path: Path) -> None:
+    """Changed source pixels must invalidate retained local-OCR evidence."""
+    page_run = _cache_page_run(tmp_path)
+    ocr = _CountingOcr()
+    service = EbookTextReviewService(
+        ocr,
+        loader=_FakeLoader(page_run),  # type: ignore[arg-type]
+    )
+    output = tmp_path / "review"
+
+    service.review(tmp_path, output)
+    Image.new("RGB", (200, 120), "black").save(page_run.source_image)
+    refreshed = service.review(tmp_path, output)
+
+    assert ocr.calls == 2
+    assert refreshed.processed_pages == 1
+    assert refreshed.reused_pages == 0
+
+
+def test_review_cache_invalidates_when_filter_policy_changes(tmp_path: Path) -> None:
+    """Changing review thresholds should recompute actionable/suppressed findings."""
+    page_run = _cache_page_run(tmp_path)
+    ocr = _CountingOcr()
+    output = tmp_path / "review"
+    first_service = EbookTextReviewService(
+        ocr,
+        loader=_FakeLoader(page_run),  # type: ignore[arg-type]
+    )
+    second_service = EbookTextReviewService(
+        ocr,
+        loader=_FakeLoader(page_run),  # type: ignore[arg-type]
+        filter_config=ReviewFilterConfig(minimum_ocr_confidence=90.0),
+    )
+
+    first_service.review(tmp_path, output)
+    refreshed = second_service.review(tmp_path, output)
+
+    assert ocr.calls == 2
+    assert refreshed.processed_pages == 1
+    assert refreshed.reused_pages == 0

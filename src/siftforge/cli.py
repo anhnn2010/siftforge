@@ -355,6 +355,14 @@ def build_parser() -> argparse.ArgumentParser:
             "are always retained in JSON."
         ),
     )
+    review_text.add_argument(
+        "--force",
+        action="store_true",
+        help=(
+            "Re-run local OCR even when a current compatible page review "
+            "already exists."
+        ),
+    )
 
     import_review = ebook_actions.add_parser(
         "import-review",
@@ -1101,17 +1109,22 @@ def _run_ebook_review_text(args: argparse.Namespace) -> int:
             args.output,
             start_page=args.start_page,
             end_page=args.end_page,
+            force=args.force,
         )
     except (TextReviewError, LocalOcrError, OSError, ValueError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
 
     print(f"pages:     {len(run.pages)}")
+    print(f"processed: {run.processed_pages}")
+    print(f"reused:    {run.reused_pages}")
     print(f"flagged:   {run.pages_with_findings}")
     print(f"findings:  {run.finding_count}")
     print(f"suppressed:{run.suppressed_count:>4}")
     print(f"summary:   {run.summary_path}")
     print(f"report:    {run.report_path}")
+    if run.manifest_path is not None:
+        print(f"manifest:  {run.manifest_path}")
     print("result: text-fidelity review artifacts generated")
     return 0
 

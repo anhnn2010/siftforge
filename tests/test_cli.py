@@ -366,6 +366,7 @@ def test_review_text_parser_accepts_local_ocr_options() -> None:
             "vie+eng",
             "--ocr-psm",
             "3",
+            "--force",
         ]
     )
 
@@ -375,6 +376,7 @@ def test_review_text_parser_accepts_local_ocr_options() -> None:
     assert args.end_page == 152
     assert args.ocr_language == "vie+eng"
     assert args.ocr_psm == 3
+    assert args.force is True
 
 
 def test_import_review_parser_accepts_exported_resolutions() -> None:

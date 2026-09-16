@@ -1487,3 +1487,54 @@ siftforge ebook build-epub \
 Without `--require-reviewed`, existing behavior is unchanged: reviewed
 correction overlays are applied when present, while incomplete review remains a
 warning/workflow concern rather than a hard build dependency.
+
+## Milestone 1I-5: incremental/resumable text review
+
+Whole-book text review now reuses compatible page-local OCR/review artifacts instead
+of running Tesseract again on every invocation. This is especially important for
+large 400-700 page books where extraction may be resumed or review policy may be
+iterated several times.
+
+The normal command remains unchanged:
+
+```bash
+siftforge ebook review-text \
+  --runs-root runs/18-nam-kim-cuong \
+  --ocr-language vie+eng
+```
+
+For every selected page, SiftForge fingerprints the normalized page artifact, the
+source image bytes, local-OCR configuration, review-filter configuration, review
+model version, and report output location. A matching fingerprint means the saved
+`ocr.json` and `findings.json` can be reloaded directly and included in a freshly
+regenerated aggregate `summary.json` / `report.html` without invoking OCR again.
+
+The command now reports both kinds of work:
+
+```text
+pages:     432
+processed: 17
+reused:    415
+flagged:   23
+...
+```
+
+Use `--force` when local OCR should be run again deliberately:
+
+```bash
+siftforge ebook review-text \
+  --runs-root runs/18-nam-kim-cuong \
+  --ocr-language vie+eng \
+  --force
+```
+
+A page is automatically recomputed when any review input changes, including the
+normalized extraction, source image, OCR language/PSM/minimum confidence, or review
+noise thresholds. Old review artifacts without the 1I-5 fingerprint are refreshed
+once and then become reusable.
+
+Each review run also writes `review/run.json` with the selected range, processed and
+reused page counts, OCR cache key, filter policy, and review-model version. Existing
+human `resolutions.json` / `corrections.json` remain separate from this mechanical
+OCR cache and continue to be protected by the review-status and correction drift
+checks.

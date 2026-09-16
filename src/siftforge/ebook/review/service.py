@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from dataclasses import replace
+from dataclasses import asdict, replace
 from pathlib import Path
 from typing import Protocol
 
@@ -11,10 +11,21 @@ from PIL import Image
 
 from siftforge.ebook.pipeline.book_assembly import EbookPageRunLoader
 
+from .cache import (
+    build_review_input_fingerprint,
+    load_cached_page_review,
+    review_cache_metadata,
+)
 from .comparison import compare_with_ocr
 from .filtering import ReviewFilterConfig, filter_ocr_findings, words_for_finding
 from .heuristics import find_suspicious_boundaries
-from .models import OcrPage, PageReviewResult, ReviewFinding, TextReviewRun
+from .models import (
+    TEXT_REVIEW_MODEL,
+    OcrPage,
+    PageReviewResult,
+    ReviewFinding,
+    TextReviewRun,
+)
 from .projection import project_page_text
 from .report import finding_to_dict, write_review_artifacts
 
@@ -52,6 +63,7 @@ class EbookTextReviewService:
         *,
         start_page: int = 1,
         end_page: int | None = None,
+        force: bool = False,
     ) -> TextReviewRun:
         """Review canonical page runs without modifying normalized extraction."""
         root = Path(runs_root).expanduser().resolve()
@@ -71,8 +83,30 @@ class EbookTextReviewService:
 
         output.mkdir(parents=True, exist_ok=True)
         pages: list[PageReviewResult] = []
+        processed_pages = 0
+        reused_pages = 0
+        ocr_cache_key = self._ocr_cache_key()
         for page_run in page_runs:
             projection = project_page_text(page_run.page)
+            fingerprint = build_review_input_fingerprint(
+                page_run=page_run,
+                projection=projection,
+                output_dir=output,
+                ocr_cache_key=ocr_cache_key,
+                filter_config=self._filter_config,
+            )
+            cached = None
+            if not force:
+                cached = load_cached_page_review(
+                    page_run=page_run,
+                    projection=projection,
+                    expected_fingerprint=fingerprint,
+                )
+            if cached is not None:
+                pages.append(cached)
+                reused_pages += 1
+                continue
+
             try:
                 ocr = self._ocr.extract(page_run.source_image)
             except Exception as exc:
@@ -110,10 +144,13 @@ class EbookTextReviewService:
                 suppressed_findings=suppressed,
             )
             pages.append(result)
+            processed_pages += 1
             self._write_page_artifacts(
                 run_dir=page_run.run_dir,
                 ocr=ocr,
                 result=result,
+                input_fingerprint=fingerprint,
+                ocr_cache_key=ocr_cache_key,
             )
 
         page_tuple = tuple(pages)
@@ -121,13 +158,48 @@ class EbookTextReviewService:
             output_dir=output,
             pages=page_tuple,
         )
+        manifest_path = output / "run.json"
+        manifest_path.write_text(
+            json.dumps(
+                {
+                    "review_model": TEXT_REVIEW_MODEL,
+                    "runs_root": str(root),
+                    "output_dir": str(output),
+                    "start_page": start_page,
+                    "end_page": end_page,
+                    "selected_pages": len(page_tuple),
+                    "processed_pages": processed_pages,
+                    "reused_pages": reused_pages,
+                    "force": force,
+                    "ocr_cache_key": ocr_cache_key,
+                    "filter_config": asdict(self._filter_config),
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
         return TextReviewRun(
             runs_root=root,
             output_dir=output,
             pages=page_tuple,
             report_path=report_path,
             summary_path=summary_path,
+            manifest_path=manifest_path,
+            processed_pages=processed_pages,
+            reused_pages=reused_pages,
         )
+
+    def _ocr_cache_key(self) -> str:
+        """Return a stable OCR configuration key without requiring OCR work."""
+        cache_key = getattr(self._ocr, "cache_key", None)
+        if callable(cache_key):
+            value = cache_key()
+            if isinstance(value, str) and value:
+                return value
+        cls = type(self._ocr)
+        return f"{cls.__module__}.{cls.__qualname__}"
 
     def _write_page_artifacts(
         self,
@@ -135,13 +207,21 @@ class EbookTextReviewService:
         run_dir: Path,
         ocr: OcrPage,
         result: PageReviewResult,
+        input_fingerprint: str,
+        ocr_cache_key: str,
     ) -> None:
         """Persist independent OCR and findings beside immutable page evidence."""
         review_dir = run_dir / "review"
         review_dir.mkdir(parents=True, exist_ok=True)
+        metadata = review_cache_metadata(
+            input_fingerprint=input_fingerprint,
+            ocr_cache_key=ocr_cache_key,
+            filter_config=self._filter_config,
+        )
         (review_dir / "ocr.json").write_text(
             json.dumps(
                 {
+                    **metadata,
                     "engine": ocr.engine,
                     "language": ocr.language,
                     "text": ocr.text,
@@ -164,7 +244,7 @@ class EbookTextReviewService:
         (review_dir / "findings.json").write_text(
             json.dumps(
                 {
-                    "review_model": "TextFidelityReview-v3",
+                    **metadata,
                     "page_id": result.page_id,
                     "page_number": result.page_number,
                     "ocr_similarity": result.ocr_similarity,
