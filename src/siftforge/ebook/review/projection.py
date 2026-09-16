@@ -2,24 +2,39 @@
 
 from __future__ import annotations
 
-from siftforge.ebook.evidence import PageExtraction
+from siftforge.ebook.evidence import BlockRoleHint, PageExtraction
 
 from .models import ProjectedText, TextAnchor
+
+_IGNORED_REVIEW_ROLES = frozenset(
+    {
+        BlockRoleHint.IMAGE,
+        BlockRoleHint.PAGE_HEADER,
+        BlockRoleHint.PAGE_FOOTER,
+        BlockRoleHint.PAGE_NUMBER,
+    }
+)
 
 
 def project_page_text(page: PageExtraction) -> ProjectedText:
     """Flatten readable page evidence while preserving source provenance.
 
     This projection exists only for review. It never replaces the structured
-    normalized artifact used by the ebook pipeline.
+    normalized artifact used by the ebook pipeline. Running furniture and image
+    placeholders are excluded because they create OCR noise without helping
+    body-text fidelity review.
     """
     characters: list[str] = []
     anchors: list[TextAnchor | None] = []
+    first_block = True
 
-    for block_index, block in enumerate(page.blocks):
-        if block_index and characters:
+    for block in page.blocks:
+        if block.role_hint in _IGNORED_REVIEW_ROLES or not block.spans:
+            continue
+        if not first_block and characters:
             characters.append(" ")
             anchors.append(None)
+        first_block = False
         for span in block.spans:
             for offset, character in enumerate(span.text):
                 characters.append(character)
@@ -29,6 +44,7 @@ def project_page_text(page: PageExtraction) -> ProjectedText:
                         block_id=block.block_id,
                         span_id=span.span_id,
                         span_offset=offset,
+                        block_role=block.role_hint.value,
                     )
                 )
             if span.semantic_line_break_after:

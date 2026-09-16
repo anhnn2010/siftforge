@@ -22,8 +22,18 @@ from siftforge.ebook.models import (
     VerticalPosition,
 )
 from siftforge.ebook.pipeline.book_assembly import EbookPageRunArtifact
-from siftforge.ebook.review import OcrPage, OcrWord, PageReviewResult
+from siftforge.ebook.review import (
+    OcrPage,
+    OcrWord,
+    PageReviewResult,
+    ReviewFilterConfig,
+    ReviewFinding,
+    ReviewKind,
+    ReviewSeverity,
+    ReviewSource,
+)
 from siftforge.ebook.review.comparison import compare_with_ocr
+from siftforge.ebook.review.filtering import filter_ocr_findings
 from siftforge.ebook.review.heuristics import find_suspicious_boundaries
 from siftforge.ebook.review.projection import project_page_text
 from siftforge.ebook.review.report import write_review_artifacts
@@ -258,3 +268,168 @@ def test_service_keeps_normalized_text_and_writes_review_overlay(
     assert finding_payload["findings"][0]["gemini_text"] == "ngày14"
     crop = result.output_dir / result.pages[0].findings[0].crop_path
     assert crop.is_file()
+
+
+def test_comparison_coalesces_nearby_character_noise() -> None:
+    """Several OCR character errors in one phrase should become one card."""
+    projection = project_page_text(_page("vượt vũ môn"))
+    ocr = OcrPage(
+        text="uượt vii mmôn",
+        words=(),
+        engine="fake",
+        language="vie",
+    )
+
+    _, findings = compare_with_ocr(
+        page_number=13,
+        projection=projection,
+        ocr=ocr,
+    )
+
+    assert len(findings) == 1
+    assert findings[0].kind.value == "replacement"
+
+
+def test_filter_suppresses_diacritic_loss_even_at_high_confidence() -> None:
+    """Common local-OCR accent loss should not dominate human review."""
+    finding = ReviewFinding(
+        finding_id="page-0013-ocr-0001",
+        page_id="pdf:test:page:0013",
+        page_number=13,
+        source=ReviewSource.OCR,
+        kind=ReviewKind.CHARACTER,
+        severity=ReviewSeverity.MINOR,
+        gemini_start=0,
+        gemini_end=1,
+        reference_start=0,
+        reference_end=1,
+        gemini_text="đ",
+        reference_text="d",
+        block_id="block",
+        span_id="span",
+        block_role="paragraph",
+    )
+    ocr = OcrPage(
+        text="d",
+        words=(
+            OcrWord(
+                text="d",
+                confidence=99.0,
+                left=0,
+                top=0,
+                width=10,
+                height=10,
+                start=0,
+                end=1,
+            ),
+        ),
+        engine="fake",
+        language="vie",
+    )
+
+    kept, suppressed = filter_ocr_findings(
+        ocr=ocr,
+        ocr_findings=(finding,),
+        heuristic_findings=(),
+        config=ReviewFilterConfig(),
+    )
+
+    assert kept == ()
+    assert len(suppressed) == 1
+    assert suppressed[0].suppressed_reason == "ocr_diacritic_loss"
+
+
+def test_filter_keeps_high_confidence_meaningful_body_mismatch() -> None:
+    """Noise reduction must retain a confident multi-character disagreement."""
+    finding = ReviewFinding(
+        finding_id="page-0013-ocr-0001",
+        page_id="pdf:test:page:0013",
+        page_number=13,
+        source=ReviewSource.OCR,
+        kind=ReviewKind.REPLACEMENT,
+        severity=ReviewSeverity.MAJOR,
+        gemini_start=0,
+        gemini_end=5,
+        reference_start=0,
+        reference_end=5,
+        gemini_text="không",
+        reference_text="khôn",
+        block_id="block",
+        span_id="span",
+        block_role="paragraph",
+    )
+    ocr = OcrPage(
+        text="khôn",
+        words=(
+            OcrWord(
+                text="khôn",
+                confidence=98.0,
+                left=0,
+                top=0,
+                width=40,
+                height=10,
+                start=0,
+                end=5,
+            ),
+        ),
+        engine="fake",
+        language="vie",
+    )
+
+    kept, suppressed = filter_ocr_findings(
+        ocr=ocr,
+        ocr_findings=(finding,),
+        heuristic_findings=(),
+        config=ReviewFilterConfig(),
+    )
+
+    assert len(kept) == 1
+    assert suppressed == ()
+
+
+def test_filter_can_show_all_ocr_differences_for_audit() -> None:
+    """Users can disable suppression when they want the raw OCR comparison."""
+    finding = ReviewFinding(
+        finding_id="page-0013-ocr-0001",
+        page_id="pdf:test:page:0013",
+        page_number=13,
+        source=ReviewSource.OCR,
+        kind=ReviewKind.CHARACTER,
+        severity=ReviewSeverity.MINOR,
+        gemini_start=0,
+        gemini_end=1,
+        reference_start=0,
+        reference_end=1,
+        gemini_text="đ",
+        reference_text="d",
+        block_id="block",
+        span_id="span",
+        block_role="paragraph",
+    )
+    ocr = OcrPage(
+        text="d",
+        words=(
+            OcrWord(
+                text="d",
+                confidence=20.0,
+                left=0,
+                top=0,
+                width=10,
+                height=10,
+                start=0,
+                end=1,
+            ),
+        ),
+        engine="fake",
+        language="vie",
+    )
+
+    kept, suppressed = filter_ocr_findings(
+        ocr=ocr,
+        ocr_findings=(finding,),
+        heuristic_findings=(),
+        config=ReviewFilterConfig(enabled=False),
+    )
+
+    assert len(kept) == 1
+    assert suppressed == ()

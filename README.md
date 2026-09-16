@@ -1378,3 +1378,39 @@ Human resolution/correction overlays are intentionally deferred to the next
 review milestone. 1I-1 is evidence generation only: original Gemini output,
 normalized evidence, local OCR, and review findings remain independently
 inspectable.
+
+## Milestone 1I-2 - Review noise reduction
+
+The review stage now treats local OCR as an independent signal rather than a
+second ground truth. Character-level diffs are first coalesced into short phrase
+findings, then OCR-only candidates are filtered using the supporting Tesseract
+word confidence and the Gemini block role.
+
+By default, low-confidence heading noise, short one- or two-character OCR noise,
+punctuation noise, and the common case where local OCR merely drops Vietnamese
+diacritics are hidden from the HTML report. They are not deleted: every
+suppressed candidate remains in `findings.json` and `summary.json` with a
+`suppressed_reason` for audit.
+
+Running furniture (`page_header`, `page_footer`, and `page_number`) plus image
+placeholders are excluded from the temporary review projection. This does not
+change normalized extraction or ebook structure; it only prevents irrelevant
+OCR differences from consuming review attention.
+
+The default command remains:
+
+```bash
+siftforge ebook review-text \
+  --runs-root runs/18-nam-kim-cuong \
+  --ocr-language vie+eng
+```
+
+The default actionable OCR threshold is 85%, with a stricter 92% threshold for
+heading-like blocks. Both can be tuned with
+`--review-min-ocr-confidence` and `--review-heading-min-ocr-confidence`.
+Use `--show-all-ocr-differences` when the unfiltered OCR comparison is desired.
+
+On the real page 13 + page 152 probe used while developing this milestone, the
+v1 report exposed 47 findings. The v2 projection/coalescing/filtering pipeline
+reduces that to two actionable findings: the source anomalies `ngày14` and
+`nhi.Tuy`. Twenty-one OCR candidates remain preserved as suppressed audit data.

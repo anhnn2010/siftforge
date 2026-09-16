@@ -12,14 +12,9 @@ from PIL import Image
 from siftforge.ebook.pipeline.book_assembly import EbookPageRunLoader
 
 from .comparison import compare_with_ocr
+from .filtering import ReviewFilterConfig, filter_ocr_findings, words_for_finding
 from .heuristics import find_suspicious_boundaries
-from .models import (
-    OcrPage,
-    OcrWord,
-    PageReviewResult,
-    ReviewFinding,
-    TextReviewRun,
-)
+from .models import OcrPage, PageReviewResult, ReviewFinding, TextReviewRun
 from .projection import project_page_text
 from .report import finding_to_dict, write_review_artifacts
 
@@ -43,10 +38,12 @@ class EbookTextReviewService:
         self,
         ocr_engine: LocalOcrEngine,
         loader: EbookPageRunLoader | None = None,
+        filter_config: ReviewFilterConfig | None = None,
     ) -> None:
         """Initialize review collaborators without provider dependencies."""
         self._ocr = ocr_engine
         self._loader = loader or EbookPageRunLoader()
+        self._filter_config = filter_config or ReviewFilterConfig()
 
     def review(
         self,
@@ -82,7 +79,7 @@ class EbookTextReviewService:
                 raise TextReviewError(
                     f"local OCR failed for page {page_run.page_number:04d}: {exc}"
                 ) from exc
-            similarity, ocr_findings = compare_with_ocr(
+            similarity, raw_ocr_findings = compare_with_ocr(
                 page_number=page_run.page_number,
                 projection=projection,
                 ocr=ocr,
@@ -90,6 +87,12 @@ class EbookTextReviewService:
             heuristic_findings = find_suspicious_boundaries(
                 page_number=page_run.page_number,
                 projection=projection,
+            )
+            ocr_findings, suppressed = filter_ocr_findings(
+                ocr=ocr,
+                ocr_findings=raw_ocr_findings,
+                heuristic_findings=heuristic_findings,
+                config=self._filter_config,
             )
             findings = self._attach_crops(
                 page_run.source_image,
@@ -104,6 +107,7 @@ class EbookTextReviewService:
                 ocr_text=ocr.text,
                 ocr_similarity=similarity,
                 findings=findings,
+                suppressed_findings=suppressed,
             )
             pages.append(result)
             self._write_page_artifacts(
@@ -160,12 +164,16 @@ class EbookTextReviewService:
         (review_dir / "findings.json").write_text(
             json.dumps(
                 {
-                    "review_model": "TextFidelityReview-v1",
+                    "review_model": "TextFidelityReview-v2",
                     "page_id": result.page_id,
                     "page_number": result.page_number,
                     "ocr_similarity": result.ocr_similarity,
                     "findings": [
                         finding_to_dict(finding) for finding in result.findings
+                    ],
+                    "suppressed_findings": [
+                        finding_to_dict(finding)
+                        for finding in result.suppressed_findings
                     ],
                 },
                 ensure_ascii=False,
@@ -188,7 +196,10 @@ class EbookTextReviewService:
         updated: list[ReviewFinding] = []
         with Image.open(source_image) as image:
             for finding in findings:
-                words = _words_for_finding(ocr, finding)
+                words = words_for_finding(ocr, finding)
+                if not words:
+                    token = finding.gemini_text.strip()
+                    words = tuple(word for word in ocr.words if word.text == token)[:1]
                 if not words:
                     updated.append(finding)
                     continue
@@ -210,26 +221,3 @@ class EbookTextReviewService:
                 relative = crop_path.relative_to(output_dir).as_posix()
                 updated.append(replace(finding, crop_path=relative))
         return tuple(updated)
-
-
-def _words_for_finding(
-    ocr: OcrPage,
-    finding: ReviewFinding,
-) -> tuple[OcrWord, ...]:
-    """Return OCR words overlapping a finding or matching its suspicious token."""
-    if finding.reference_start is not None and finding.reference_end is not None:
-        start = finding.reference_start
-        end = finding.reference_end
-        words = tuple(
-            word
-            for word in ocr.words
-            if word.end > start and word.start < max(end, start + 1)
-        )
-        if words:
-            return words
-    token = finding.gemini_text.strip()
-    if token:
-        exact = tuple(word for word in ocr.words if word.text == token)
-        if exact:
-            return exact[:1]
-    return ()

@@ -61,6 +61,7 @@ def find_suspicious_boundaries(
                 reference_text="",
                 block_id=anchor.block_id if anchor else None,
                 span_id=anchor.span_id if anchor else None,
+                block_role=anchor.block_role if anchor else None,
                 suggested_text=replacement,
             )
         )

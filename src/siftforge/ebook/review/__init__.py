@@ -1,5 +1,6 @@
 """Text-fidelity review using local OCR and conservative heuristics."""
 
+from .filtering import ReviewFilterConfig
 from .models import (
     OcrPage,
     OcrWord,
@@ -22,6 +23,7 @@ __all__: list[str] = [
     "OcrWord",
     "PageReviewResult",
     "ProjectedText",
+    "ReviewFilterConfig",
     "ReviewFinding",
     "ReviewKind",
     "ReviewSeverity",

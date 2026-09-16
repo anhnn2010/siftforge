@@ -53,31 +53,56 @@ def finding_to_dict(finding: ReviewFinding) -> dict[str, Any]:
         "suggested_text": finding.suggested_text,
         "block_id": finding.block_id,
         "span_id": finding.span_id,
+        "block_role": finding.block_role,
         "crop_path": finding.crop_path,
+        "ocr_confidence": finding.ocr_confidence,
+        "suppressed_reason": finding.suppressed_reason,
     }
 
 
 def _summary_payload(pages: tuple[PageReviewResult, ...]) -> dict[str, Any]:
     """Build the stable whole-run review summary payload."""
     findings = [finding for page in pages for finding in page.findings]
+    suppressed = [
+        finding for page in pages for finding in page.suppressed_findings
+    ]
     return {
-        "review_model": "TextFidelityReview-v1",
+        "review_model": "TextFidelityReview-v2",
         "pages_reviewed": len(pages),
         "pages_with_findings": sum(bool(page.findings) for page in pages),
         "findings_total": len(findings),
+        "suppressed_total": len(suppressed),
+        "raw_candidates_total": len(findings) + len(suppressed),
         "findings_by_source": {
             source: sum(finding.source.value == source for finding in findings)
             for source in ("local_ocr", "heuristic")
         },
+        "suppressed_by_reason": _count_suppression_reasons(suppressed),
         "pages": [
             {
                 "page_id": page.page_id,
                 "page_number": page.page_number,
                 "ocr_similarity": round(page.ocr_similarity, 6),
                 "findings": [finding_to_dict(item) for item in page.findings],
+                "suppressed_findings": [
+                    finding_to_dict(item) for item in page.suppressed_findings
+                ],
             }
             for page in pages
         ],
+    }
+
+
+def _count_suppression_reasons(
+    findings: list[ReviewFinding],
+) -> dict[str, int]:
+    """Return stable counts for audit-only suppressed OCR candidates."""
+    reasons = sorted(
+        {finding.suppressed_reason for finding in findings if finding.suppressed_reason}
+    )
+    return {
+        reason: sum(finding.suppressed_reason == reason for finding in findings)
+        for reason in reasons
     }
 
 
@@ -93,7 +118,7 @@ def _render_html(
         _render_page(page, context_chars=context_chars) for page in finding_pages
     )
     if not cards:
-        cards = '<div class="empty">No review findings.</div>'
+        cards = '<div class="empty">No actionable review findings.</div>'
     return f"""<!doctype html>
 <html lang="en">
 <head>
@@ -124,8 +149,11 @@ img.crop {{ max-width: 100%; border: 1px solid #ddd; margin-top: .8rem; }}
 <div class="summary">
 <div class="metric">Pages: {payload['pages_reviewed']}</div>
 <div class="metric">Pages needing review: {payload['pages_with_findings']}</div>
-<div class="metric">Findings: {payload['findings_total']}</div>
+<div class="metric">Actionable findings: {payload['findings_total']}</div>
+<div class="metric">Suppressed OCR noise: {payload['suppressed_total']}</div>
 </div>
+<p class="meta">Low-confidence OCR differences are retained in JSON for audit,
+but hidden from this report by default.</p>
 </header>
 {cards}
 </body>
@@ -134,14 +162,16 @@ img.crop {{ max-width: 100%; border: 1px solid #ddd; margin-top: .8rem; }}
 
 
 def _render_page(page: PageReviewResult, *, context_chars: int) -> str:
-    """Render all findings for one page."""
+    """Render all actionable findings for one page."""
     findings = "\n".join(
         _render_finding(page, finding, context_chars=context_chars)
         for finding in page.findings
     )
     return (
         f'<section class="page"><h2>Page {page.page_number:04d}</h2>'
-        f'<div class="meta">OCR similarity: {page.ocr_similarity:.2%}</div>'
+        f'<div class="meta">OCR similarity: {page.ocr_similarity:.2%} · '
+        f"actionable: {len(page.findings)} · "
+        f"suppressed: {len(page.suppressed_findings)}</div>"
         f"{findings}</section>"
     )
 
@@ -170,6 +200,12 @@ def _render_finding(
     else:
         reference = html.escape(finding.suggested_text or "")
         reference_label = "Heuristic suggestion"
+    confidence = (
+        f" · OCR confidence {finding.ocr_confidence:.1f}%"
+        if finding.ocr_confidence is not None
+        else ""
+    )
+    role = f" · {html.escape(finding.block_role)}" if finding.block_role else ""
     crop = (
         f'<img class="crop" src="{html.escape(finding.crop_path)}" '
         'alt="Source crop for this review finding" />'
@@ -179,8 +215,8 @@ def _render_finding(
     return f"""
 <article class="finding" id="{html.escape(finding.finding_id)}">
 <div class="meta">{html.escape(finding.source.value)} ·
-{html.escape(finding.kind.value)} · {html.escape(finding.severity.value)} ·
-{html.escape(finding.block_id or 'unmapped')}</div>
+{html.escape(finding.kind.value)} · {html.escape(finding.severity.value)}{role}
+{confidence} · {html.escape(finding.block_id or 'unmapped')}</div>
 <div class="compare">
 <div><strong>Gemini</strong><pre>{gemini}</pre></div>
 <div><strong>{reference_label}</strong><pre>{reference}</pre></div>

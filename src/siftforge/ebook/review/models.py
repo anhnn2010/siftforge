@@ -41,6 +41,7 @@ class TextAnchor:
     block_id: str
     span_id: str
     span_offset: int
+    block_role: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -93,8 +94,11 @@ class ReviewFinding:
     reference_text: str
     block_id: str | None
     span_id: str | None
+    block_role: str | None = None
     suggested_text: str | None = None
     crop_path: str | None = None
+    ocr_confidence: float | None = None
+    suppressed_reason: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -107,6 +111,7 @@ class PageReviewResult:
     ocr_text: str
     ocr_similarity: float
     findings: tuple[ReviewFinding, ...]
+    suppressed_findings: tuple[ReviewFinding, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -121,8 +126,13 @@ class TextReviewRun:
 
     @property
     def finding_count(self) -> int:
-        """Return total findings across all reviewed pages."""
+        """Return actionable findings across all reviewed pages."""
         return sum(len(page.findings) for page in self.pages)
+
+    @property
+    def suppressed_count(self) -> int:
+        """Return OCR differences filtered as low-value review noise."""
+        return sum(len(page.suppressed_findings) for page in self.pages)
 
     @property
     def pages_with_findings(self) -> int:

@@ -35,6 +35,7 @@ from siftforge.ebook.pipeline import (
 from siftforge.ebook.review import (
     EbookTextReviewService,
     LocalOcrError,
+    ReviewFilterConfig,
     TesseractOcrConfig,
     TesseractOcrEngine,
     TextReviewError,
@@ -321,6 +322,32 @@ def build_parser() -> argparse.ArgumentParser:
         type=float,
         default=0.0,
         help="Discard OCR words below this confidence. Defaults to 0.",
+    )
+    review_text.add_argument(
+        "--review-min-ocr-confidence",
+        type=float,
+        default=85.0,
+        help=(
+            "Hide OCR-only findings below this confidence while retaining "
+            "them in JSON. Defaults to 85."
+        ),
+    )
+    review_text.add_argument(
+        "--review-heading-min-ocr-confidence",
+        type=float,
+        default=92.0,
+        help=(
+            "Stricter confidence threshold for heading-like OCR findings. "
+            "Defaults to 92."
+        ),
+    )
+    review_text.add_argument(
+        "--show-all-ocr-differences",
+        action="store_true",
+        help=(
+            "Disable OCR noise suppression in the HTML report. Raw findings "
+            "are always retained in JSON."
+        ),
     )
 
     assemble_book = ebook_actions.add_parser(
@@ -982,6 +1009,16 @@ def _run_ebook_review_text(args: argparse.Namespace) -> int:
             file=sys.stderr,
         )
         return 2
+    for option, value in (
+        ("--review-min-ocr-confidence", args.review_min_ocr_confidence),
+        (
+            "--review-heading-min-ocr-confidence",
+            args.review_heading_min_ocr_confidence,
+        ),
+    ):
+        if not 0 <= value <= 100:
+            print(f"error: {option} must be between 0 and 100", file=sys.stderr)
+            return 2
     engine = TesseractOcrEngine(
         TesseractOcrConfig(
             command=args.tesseract_command,
@@ -990,7 +1027,16 @@ def _run_ebook_review_text(args: argparse.Namespace) -> int:
             minimum_confidence=args.minimum_ocr_confidence,
         )
     )
-    service = EbookTextReviewService(engine)
+    service = EbookTextReviewService(
+        engine,
+        filter_config=ReviewFilterConfig(
+            enabled=not args.show_all_ocr_differences,
+            minimum_ocr_confidence=args.review_min_ocr_confidence,
+            minimum_heading_ocr_confidence=(
+                args.review_heading_min_ocr_confidence
+            ),
+        ),
+    )
     try:
         run = service.review(
             args.runs_root,
@@ -1005,6 +1051,7 @@ def _run_ebook_review_text(args: argparse.Namespace) -> int:
     print(f"pages:     {len(run.pages)}")
     print(f"flagged:   {run.pages_with_findings}")
     print(f"findings:  {run.finding_count}")
+    print(f"suppressed:{run.suppressed_count:>4}")
     print(f"summary:   {run.summary_path}")
     print(f"report:    {run.report_path}")
     print("result: text-fidelity review artifacts generated")
