@@ -375,3 +375,21 @@ def test_review_text_parser_accepts_local_ocr_options() -> None:
     assert args.end_page == 152
     assert args.ocr_language == "vie+eng"
     assert args.ocr_psm == 3
+
+
+def test_import_review_parser_accepts_exported_resolutions() -> None:
+    """Human review exports should have a dedicated provider-free CLI step."""
+    parser = build_parser()
+    args = parser.parse_args(
+        [
+            "ebook",
+            "import-review",
+            "--runs-root",
+            "runs/book",
+            "--resolutions",
+            "review.json",
+        ]
+    )
+
+    assert args.runs_root == Path("runs/book")
+    assert args.resolutions == Path("review.json")

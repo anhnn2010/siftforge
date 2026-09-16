@@ -14,6 +14,12 @@ from .models import (
     TextReviewRun,
 )
 from .ocr import LocalOcrError, TesseractOcrConfig, TesseractOcrEngine
+from .resolution import (
+    ReviewDecision,
+    ReviewImportResult,
+    ReviewResolutionError,
+    import_review_resolutions,
+)
 from .service import EbookTextReviewService, TextReviewError
 
 __all__: list[str] = [
@@ -23,14 +29,18 @@ __all__: list[str] = [
     "OcrWord",
     "PageReviewResult",
     "ProjectedText",
+    "ReviewDecision",
     "ReviewFilterConfig",
+    "ReviewImportResult",
     "ReviewFinding",
     "ReviewKind",
     "ReviewSeverity",
+    "ReviewResolutionError",
     "ReviewSource",
     "TesseractOcrConfig",
     "TesseractOcrEngine",
     "TextAnchor",
     "TextReviewError",
     "TextReviewRun",
+    "import_review_resolutions",
 ]

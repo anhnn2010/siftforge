@@ -164,7 +164,7 @@ class EbookTextReviewService:
         (review_dir / "findings.json").write_text(
             json.dumps(
                 {
-                    "review_model": "TextFidelityReview-v2",
+                    "review_model": "TextFidelityReview-v3",
                     "page_id": result.page_id,
                     "page_number": result.page_number,
                     "ocr_similarity": result.ocr_similarity,

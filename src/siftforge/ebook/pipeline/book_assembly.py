@@ -13,7 +13,11 @@ from siftforge.ebook.assets import (
     FigureAssetMaterializer,
     FigureSourcePage,
 )
-from siftforge.ebook.evidence import PageExtraction
+from siftforge.ebook.evidence import (
+    PageExtraction,
+    TextCorrectionError,
+    apply_text_corrections,
+)
 from siftforge.ebook.extraction import EbookPageEvidenceNormalizer
 from siftforge.ebook.structure import (
     BookDocument,
@@ -156,7 +160,19 @@ class EbookBookAssemblyService:
         output_dir: str | Path,
     ) -> EbookBookAssemblyRun:
         """Assemble persisted page runs without making any provider calls."""
-        page_runs = self._loader.discover(runs_root)
+        raw_page_runs = self._loader.discover(runs_root)
+        try:
+            page_runs = tuple(
+                replace(
+                    page_run,
+                    page=_load_effective_page(page_run),
+                )
+                for page_run in raw_page_runs
+            )
+        except (OSError, ValueError, TextCorrectionError) as exc:
+            raise EbookBookAssemblyError(
+                f"review correction overlay failed: {exc}"
+            ) from exc
         output = Path(output_dir).expanduser().resolve()
         output.mkdir(parents=True, exist_ok=True)
 
@@ -267,6 +283,15 @@ class EbookBookAssemblyService:
                 ],
             },
         )
+
+
+def _load_effective_page(page_run: EbookPageRunArtifact) -> PageExtraction:
+    """Overlay reviewed corrections while keeping normalized evidence immutable."""
+    path = page_run.run_dir / "review" / "corrections.json"
+    if not path.is_file():
+        return page_run.page
+    payload = _load_json_object(path)
+    return apply_text_corrections(page_run.page, payload)
 
 
 def _load_json_object(path: Path) -> dict[str, Any]:

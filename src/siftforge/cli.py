@@ -36,9 +36,11 @@ from siftforge.ebook.review import (
     EbookTextReviewService,
     LocalOcrError,
     ReviewFilterConfig,
+    ReviewResolutionError,
     TesseractOcrConfig,
     TesseractOcrEngine,
     TextReviewError,
+    import_review_resolutions,
 )
 from siftforge.extraction.materializers import PDFPageMaterializationError
 from siftforge.extraction.providers import (
@@ -350,6 +352,26 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
 
+    import_review = ebook_actions.add_parser(
+        "import-review",
+        help=(
+            "Import explicit human review decisions and compile safe text "
+            "correction overlays for later EPUB builds."
+        ),
+    )
+    import_review.add_argument(
+        "--runs-root",
+        required=True,
+        type=Path,
+        help="Directory containing canonical page-* extraction runs.",
+    )
+    import_review.add_argument(
+        "--resolutions",
+        required=True,
+        type=Path,
+        help="JSON file exported from the text-review HTML report.",
+    )
+
     assemble_book = ebook_actions.add_parser(
         "assemble-book",
         help="Assemble existing v5 page runs into logical book structure.",
@@ -617,6 +639,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _run_ebook_convert_pdf(args)
     if args.domain == "ebook" and args.action == "review-text":
         return _run_ebook_review_text(args)
+    if args.domain == "ebook" and args.action == "import-review":
+        return _run_ebook_import_review(args)
     if args.domain == "ebook" and args.action == "assemble-book":
         return _run_ebook_assemble_book(args)
     if args.domain == "ebook" and args.action == "render-xhtml":
@@ -1055,6 +1079,25 @@ def _run_ebook_review_text(args: argparse.Namespace) -> int:
     print(f"summary:   {run.summary_path}")
     print(f"report:    {run.report_path}")
     print("result: text-fidelity review artifacts generated")
+    return 0
+
+
+def _run_ebook_import_review(args: argparse.Namespace) -> int:
+    """Import human review choices without modifying normalized page JSON."""
+    try:
+        result = import_review_resolutions(
+            args.runs_root,
+            args.resolutions,
+        )
+    except (ReviewResolutionError, OSError, ValueError) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+
+    print(f"resolved:    {result.resolved_count}")
+    print(f"corrections: {result.correction_count}")
+    print(f"pages:       {result.pages_touched}")
+    print(f"saved:       {result.aggregate_path}")
+    print("result: human review decisions imported")
     return 0
 
 

@@ -191,6 +191,11 @@ def test_html_report_highlights_review_context(tmp_path: Path) -> None:
     assert "SiftForge text-fidelity review" in rendered
     assert "<mark>∅</mark>" in rendered
     assert "Local OCR" in rendered
+    assert "Keep source" in rendered
+    assert "Use OCR" in rendered
+    assert "Use suggestion" in rendered
+    assert "Export resolutions.json" in rendered
+    assert "siftforge-text-review-resolutions" in rendered
 
 
 class _FakeLoader:

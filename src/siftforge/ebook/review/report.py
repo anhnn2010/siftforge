@@ -67,7 +67,7 @@ def _summary_payload(pages: tuple[PageReviewResult, ...]) -> dict[str, Any]:
         finding for page in pages for finding in page.suppressed_findings
     ]
     return {
-        "review_model": "TextFidelityReview-v2",
+        "review_model": "TextFidelityReview-v3",
         "pages_reviewed": len(pages),
         "pages_with_findings": sum(bool(page.findings) for page in pages),
         "findings_total": len(findings),
@@ -139,6 +139,13 @@ pre {{ white-space: pre-wrap; word-break: break-word; background: #f7f7f7;
   padding: .8rem; border-radius: 6px; }}
 mark {{ padding: 0 .1rem; }}
 img.crop {{ max-width: 100%; border: 1px solid #ddd; margin-top: .8rem; }}
+.resolution {{ margin-top: 1rem; padding-top: .8rem; border-top: 1px dashed #ccc; }}
+.choice {{ margin-right: 1rem; display: inline-block; }}
+.manual {{ width: min(100%, 42rem); margin-top: .6rem; padding: .45rem; }}
+.actions {{ position: sticky; bottom: 0; background: #fff;
+  border-top: 1px solid #ddd; padding: 1rem 0; margin-top: 2rem; }}
+button {{ padding: .55rem .9rem; cursor: pointer; }}
+#resolution-status {{ margin-left: .8rem; color: #666; }}
 .empty {{ padding: 2rem; background: #f7f7f7; border-radius: 8px; }}
 @media (max-width: 800px) {{ .compare {{ grid-template-columns: 1fr; }} }}
 </style>
@@ -154,8 +161,75 @@ img.crop {{ max-width: 100%; border: 1px solid #ddd; margin-top: .8rem; }}
 </div>
 <p class="meta">Low-confidence OCR differences are retained in JSON for audit,
 but hidden from this report by default.</p>
+<p class="meta">Choose a decision only after checking the source crop. The browser
+keeps choices locally until you export them; no normalized extraction file is
+modified by this report.</p>
 </header>
 {cards}
+<div class="actions">
+<button type="button" onclick="exportResolutions()">Export resolutions.json</button>
+<span id="resolution-status"></span>
+</div>
+<script>
+const REVIEW_FORMAT = "siftforge-text-review-resolutions";
+const REVIEW_VERSION = 1;
+const STORAGE_KEY = `siftforge-review:${{location.pathname}}`;
+function selectedState() {{
+  const state = {{}};
+  document.querySelectorAll("article.finding").forEach((card) => {{
+    const id = card.id;
+    const checked = card.querySelector('input[type="radio"]:checked');
+    if (!checked) return;
+    const item = {{finding_id: id, decision: checked.value}};
+    if (checked.value === "manual") {{
+      item.replacement_text = card.querySelector("input.manual").value;
+    }}
+    state[id] = item;
+  }});
+  return state;
+}}
+function saveState() {{
+  const state = selectedState();
+  try {{ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }}
+  catch (_) {{ /* file:// storage may be unavailable; export still works. */ }}
+  document.getElementById("resolution-status").textContent =
+    `${{Object.keys(state).length}} decision(s) selected`;
+}}
+function restoreState() {{
+  let state = {{}};
+  try {{ state = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{{}}"); }}
+  catch (_) {{ state = {{}}; }}
+  Object.values(state).forEach((item) => {{
+    const card = document.getElementById(item.finding_id);
+    if (!card) return;
+    const radio = card.querySelector(`input[value="${{item.decision}}"]`);
+    if (radio) radio.checked = true;
+    if (item.decision === "manual") {{
+      card.querySelector("input.manual").value = item.replacement_text || "";
+    }}
+  }});
+  saveState();
+}}
+function exportResolutions() {{
+  const resolutions = Object.values(selectedState());
+  const payload = {{
+    format: REVIEW_FORMAT,
+    version: REVIEW_VERSION,
+    resolutions,
+  }};
+  const blob = new Blob([JSON.stringify(payload, null, 2) + "\n"],
+    {{type: "application/json"}});
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = "siftforge-review-resolutions.json";
+  anchor.click();
+  URL.revokeObjectURL(url);
+}}
+document.addEventListener("change", saveState);
+document.addEventListener("input", saveState);
+restoreState();
+</script>
 </body>
 </html>
 """
@@ -212,6 +286,7 @@ def _render_finding(
         if finding.crop_path
         else ""
     )
+    resolution = _render_resolution_controls(finding)
     return f"""
 <article class="finding" id="{html.escape(finding.finding_id)}">
 <div class="meta">{html.escape(finding.source.value)} ·
@@ -222,7 +297,29 @@ def _render_finding(
 <div><strong>{reference_label}</strong><pre>{reference}</pre></div>
 </div>
 {crop}
+{resolution}
 </article>
+"""
+
+
+def _render_resolution_controls(finding: ReviewFinding) -> str:
+    """Render explicit human decisions without claiming any automatic truth."""
+    group = html.escape(f"decision-{finding.finding_id}")
+    ocr_disabled = "" if finding.source.value == "local_ocr" else " disabled"
+    suggestion_disabled = "" if finding.suggested_text is not None else " disabled"
+    return f"""
+<div class="resolution">
+<strong>Resolution</strong><br />
+<label class="choice"><input type="radio" name="{group}"
+ value="keep_source" /> Keep source</label>
+<label class="choice"><input type="radio" name="{group}"
+ value="use_ocr"{ocr_disabled} /> Use OCR</label>
+<label class="choice"><input type="radio" name="{group}"
+ value="use_suggestion"{suggestion_disabled} /> Use suggestion</label>
+<label class="choice"><input type="radio" name="{group}"
+ value="manual" /> Manual</label><br />
+<input class="manual" type="text" placeholder="Manual replacement text" />
+</div>
 """
 
 

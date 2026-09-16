@@ -204,3 +204,163 @@ def test_sparse_page_runs_do_not_create_continuation_candidates(
     ]
     assert len(paragraphs) == 2
     assert run.analysis.continuation_candidates == ()
+
+
+def test_review_resolution_overlay_changes_effective_book_not_normalized_source(
+    tmp_path: Path,
+) -> None:
+    """Approved review corrections should affect assembly through an overlay."""
+    from siftforge.ebook.review import import_review_resolutions
+
+    root = tmp_path / "runs"
+    root.mkdir()
+    run_dir = _write_page_run(
+        root,
+        13,
+        [_block("paragraph", "3 giờ sáng ngày14 tháng 12")],
+    )
+    normalized_path = run_dir / "normalized" / "page.json"
+    normalized_before = normalized_path.read_text(encoding="utf-8")
+    page = EbookPageRunLoader().load(run_dir).page
+    span = page.blocks[0].spans[0]
+    projected = "3 giờ sáng ngày14 tháng 12"
+    start = projected.index("ngày14")
+    review_dir = run_dir / "review"
+    review_dir.mkdir()
+    (review_dir / "findings.json").write_text(
+        json.dumps(
+            {
+                "review_model": "TextFidelityReview-v3",
+                "page_id": page.page_id,
+                "page_number": 13,
+                "ocr_similarity": 1.0,
+                "findings": [
+                    {
+                        "finding_id": "page-0013-heur-0001",
+                        "page_id": page.page_id,
+                        "page_number": 13,
+                        "source": "heuristic",
+                        "kind": "suspicious_boundary",
+                        "severity": "major",
+                        "gemini_range": [start, start + len("ngày14")],
+                        "reference_range": None,
+                        "gemini_text": "ngày14",
+                        "reference_text": "",
+                        "suggested_text": "ngày 14",
+                        "block_id": page.blocks[0].block_id,
+                        "span_id": span.span_id,
+                        "block_role": "paragraph",
+                        "crop_path": None,
+                        "ocr_confidence": None,
+                        "suppressed_reason": None,
+                    }
+                ],
+                "suppressed_findings": [],
+            },
+            ensure_ascii=False,
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+    exported = tmp_path / "resolutions.json"
+    exported.write_text(
+        json.dumps(
+            {
+                "format": "siftforge-text-review-resolutions",
+                "version": 1,
+                "resolutions": [
+                    {
+                        "finding_id": "page-0013-heur-0001",
+                        "decision": "use_suggestion",
+                    }
+                ],
+            },
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+
+    imported = import_review_resolutions(root, exported)
+    assembled = EbookBookAssemblyService().assemble(root, tmp_path / "book")
+
+    assert imported.resolved_count == 1
+    assert imported.correction_count == 1
+    assert normalized_path.read_text(encoding="utf-8") == normalized_before
+    paragraph = assembled.document.nodes[0]
+    assert isinstance(paragraph, ParagraphNode)
+    assert "".join(item.text for item in paragraph.spans) == (
+        "3 giờ sáng ngày 14 tháng 12"
+    )
+    correction_payload = json.loads(
+        (run_dir / "review" / "corrections.json").read_text(encoding="utf-8")
+    )
+    assert correction_payload["corrections"][0]["span_id"] == span.span_id
+
+
+def test_keep_source_resolution_does_not_create_text_edit(tmp_path: Path) -> None:
+    """A reviewed source anomaly can be explicitly accepted without mutation."""
+    from siftforge.ebook.review import import_review_resolutions
+
+    root = tmp_path / "runs"
+    root.mkdir()
+    run_dir = _write_page_run(root, 152, [_block("paragraph", "nhi.Tuy nhiên")])
+    page = EbookPageRunLoader().load(run_dir).page
+    review_dir = run_dir / "review"
+    review_dir.mkdir()
+    (review_dir / "findings.json").write_text(
+        json.dumps(
+            {
+                "review_model": "TextFidelityReview-v3",
+                "page_id": page.page_id,
+                "page_number": 152,
+                "ocr_similarity": 1.0,
+                "findings": [
+                    {
+                        "finding_id": "page-0152-heur-0001",
+                        "page_id": page.page_id,
+                        "page_number": 152,
+                        "source": "heuristic",
+                        "kind": "suspicious_boundary",
+                        "severity": "major",
+                        "gemini_range": [0, 7],
+                        "reference_range": None,
+                        "gemini_text": "nhi.Tuy",
+                        "reference_text": "",
+                        "suggested_text": "nhi. Tuy",
+                        "block_id": page.blocks[0].block_id,
+                        "span_id": page.blocks[0].spans[0].span_id,
+                        "block_role": "paragraph",
+                        "crop_path": None,
+                        "ocr_confidence": None,
+                        "suppressed_reason": None,
+                    }
+                ],
+                "suppressed_findings": [],
+            }
+        ),
+        encoding="utf-8",
+    )
+    exported = tmp_path / "resolutions.json"
+    exported.write_text(
+        json.dumps(
+            {
+                "format": "siftforge-text-review-resolutions",
+                "version": 1,
+                "resolutions": [
+                    {
+                        "finding_id": "page-0152-heur-0001",
+                        "decision": "keep_source",
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = import_review_resolutions(root, exported)
+    assembled = EbookBookAssemblyService().assemble(root, tmp_path / "book")
+
+    assert result.correction_count == 0
+    paragraph = assembled.document.nodes[0]
+    assert isinstance(paragraph, ParagraphNode)
+    assert "".join(item.text for item in paragraph.spans) == "nhi.Tuy nhiên"
