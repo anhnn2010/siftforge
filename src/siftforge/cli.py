@@ -32,6 +32,13 @@ from siftforge.ebook.pipeline import (
     EbookPdfToEpubError,
     EbookPdfToEpubService,
 )
+from siftforge.ebook.review import (
+    EbookTextReviewService,
+    LocalOcrError,
+    TesseractOcrConfig,
+    TesseractOcrEngine,
+    TextReviewError,
+)
 from siftforge.extraction.materializers import PDFPageMaterializationError
 from siftforge.extraction.providers import (
     Extractor,
@@ -261,6 +268,60 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     _add_gemini_routing_arguments(convert_pdf)
+
+    review_text = ebook_actions.add_parser(
+        "review-text",
+        help=(
+            "Compare normalized Gemini text with local OCR and produce a "
+            "human-readable fidelity review report."
+        ),
+    )
+    review_text.add_argument(
+        "--runs-root",
+        required=True,
+        type=Path,
+        help="Directory containing canonical page-* extraction runs.",
+    )
+    review_text.add_argument(
+        "--output",
+        type=Path,
+        default=None,
+        help="Review output directory. Defaults to <runs-root>/review.",
+    )
+    review_text.add_argument(
+        "--start-page",
+        type=int,
+        default=1,
+        help="Inclusive first physical page to review. Defaults to 1.",
+    )
+    review_text.add_argument(
+        "--end-page",
+        type=int,
+        default=None,
+        help="Inclusive final physical page. Defaults to the final page run.",
+    )
+    review_text.add_argument(
+        "--ocr-language",
+        default="vie+eng",
+        help="Tesseract language expression. Defaults to vie+eng.",
+    )
+    review_text.add_argument(
+        "--tesseract-command",
+        default="tesseract",
+        help="Tesseract executable. Defaults to tesseract.",
+    )
+    review_text.add_argument(
+        "--ocr-psm",
+        type=int,
+        default=3,
+        help="Tesseract page segmentation mode. Defaults to 3.",
+    )
+    review_text.add_argument(
+        "--minimum-ocr-confidence",
+        type=float,
+        default=0.0,
+        help="Discard OCR words below this confidence. Defaults to 0.",
+    )
 
     assemble_book = ebook_actions.add_parser(
         "assemble-book",
@@ -527,6 +588,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _run_ebook_extract_book(args)
     if args.domain == "ebook" and args.action == "convert-pdf":
         return _run_ebook_convert_pdf(args)
+    if args.domain == "ebook" and args.action == "review-text":
+        return _run_ebook_review_text(args)
     if args.domain == "ebook" and args.action == "assemble-book":
         return _run_ebook_assemble_book(args)
     if args.domain == "ebook" and args.action == "render-xhtml":
@@ -900,6 +963,52 @@ def _run_ebook_convert_pdf(args: argparse.Namespace) -> int:
         )
     )
     return 0 if result.passed else 1
+
+
+def _run_ebook_review_text(args: argparse.Namespace) -> int:
+    """Run provider-free text fidelity review across canonical page runs."""
+    if args.start_page < 1:
+        print("error: --start-page must be >= 1", file=sys.stderr)
+        return 2
+    if args.end_page is not None and args.end_page < args.start_page:
+        print(
+            "error: --end-page must be >= --start-page",
+            file=sys.stderr,
+        )
+        return 2
+    if args.minimum_ocr_confidence < 0:
+        print(
+            "error: --minimum-ocr-confidence must be >= 0",
+            file=sys.stderr,
+        )
+        return 2
+    engine = TesseractOcrEngine(
+        TesseractOcrConfig(
+            command=args.tesseract_command,
+            language=args.ocr_language,
+            page_segmentation_mode=args.ocr_psm,
+            minimum_confidence=args.minimum_ocr_confidence,
+        )
+    )
+    service = EbookTextReviewService(engine)
+    try:
+        run = service.review(
+            args.runs_root,
+            args.output,
+            start_page=args.start_page,
+            end_page=args.end_page,
+        )
+    except (TextReviewError, LocalOcrError, OSError, ValueError) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+
+    print(f"pages:     {len(run.pages)}")
+    print(f"flagged:   {run.pages_with_findings}")
+    print(f"findings:  {run.finding_count}")
+    print(f"summary:   {run.summary_path}")
+    print(f"report:    {run.report_path}")
+    print("result: text-fidelity review artifacts generated")
+    return 0
 
 
 def _run_ebook_assemble_book(args: argparse.Namespace) -> int:

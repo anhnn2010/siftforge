@@ -345,3 +345,33 @@ def test_validate_epub_parser_accepts_external_tool_configuration() -> None:
     assert args.timeout == 90.0
     assert args.report == Path("artifacts/epubcheck.json")
 
+
+
+def test_review_text_parser_accepts_local_ocr_options() -> None:
+    """Text review should expose page range and local Tesseract controls."""
+    parser = build_parser()
+    args = parser.parse_args(
+        [
+            "ebook",
+            "review-text",
+            "--runs-root",
+            "runs/book",
+            "--output",
+            "runs/book/review",
+            "--start-page",
+            "13",
+            "--end-page",
+            "152",
+            "--ocr-language",
+            "vie+eng",
+            "--ocr-psm",
+            "3",
+        ]
+    )
+
+    assert args.runs_root == Path("runs/book")
+    assert args.output == Path("runs/book/review")
+    assert args.start_page == 13
+    assert args.end_page == 152
+    assert args.ocr_language == "vie+eng"
+    assert args.ocr_psm == 3

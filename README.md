@@ -1309,3 +1309,72 @@ path, and packaging validates that it is also part of the ordered spine.
 
 These changes are downstream only. Existing page extraction runs can be reused;
 rerun `build-epub` to regenerate assembly-derived XHTML and the final EPUB.
+
+## Milestone 1I-1 - Text fidelity review
+
+Page extraction remains unchanged: Gemini still reads the original page image and
+produces prompt 5.2 / schema v5 evidence. This milestone adds an independent,
+provider-free review stage after extraction instead of changing that proven path.
+
+```text
+normalized PageExtraction
+        ├── review projection with block/span provenance
+        └── original page image → local Tesseract OCR
+                         ↓
+                    text aligner
+                         +
+              conservative heuristics
+                         ↓
+                  review findings
+```
+
+Run review over existing canonical page runs:
+
+```bash
+siftforge ebook review-text \
+  --runs-root runs/18-nam-kim-cuong \
+  --ocr-language vie+eng
+```
+
+The default local engine is the `tesseract` executable. No new Python OCR package
+is required, but Tesseract and the requested language data must be installed on
+the machine. A page range can be inspected first with `--start-page` and
+`--end-page`.
+
+The structured Gemini text is flattened only into a temporary comparison
+projection. Character provenance still maps findings back to normalized
+`block_id` and `span_id`; `normalized/page.json` is never rewritten by review.
+Each page receives additive artifacts:
+
+```text
+page-NNNN/
+└── review/
+    ├── ocr.json
+    └── findings.json
+```
+
+The whole run also receives:
+
+```text
+review/
+├── summary.json
+├── report.html
+└── crops/
+```
+
+`report.html` highlights the smallest localized Gemini/OCR disagreement and shows
+an image crop when OCR coordinates can locate the source evidence. Findings from
+simple suspicious-boundary heuristics are shown before noisy OCR differences.
+The heuristics only flag candidates; they never silently repair text.
+
+This matters when both readers reproduce the same source typography. For
+example, if the scanned page itself contains `ngày14`, both Gemini and Tesseract
+may agree on `ngày14`. The independent heuristic still flags the letter→digit
+boundary as a review candidate and can show the source crop. The same applies to
+patterns such as `nhi.Tuy`, where a lower-case word and an upper-case sentence
+start are glued across a period.
+
+Human resolution/correction overlays are intentionally deferred to the next
+review milestone. 1I-1 is evidence generation only: original Gemini output,
+normalized evidence, local OCR, and review findings remain independently
+inspectable.
