@@ -8,6 +8,11 @@ import shutil
 from dataclasses import dataclass
 from pathlib import Path
 
+from siftforge.ebook.review.status import (
+    ReviewStatusError,
+    ReviewStatusService,
+)
+
 from .book_assembly import (
     EbookBookAssemblyError,
     EbookBookAssemblyRun,
@@ -73,6 +78,7 @@ class EbookBuildService:
         java_command: str = "java",
         timeout_seconds: float = 120.0,
         report_path: str | Path | None = None,
+        require_reviewed: bool = False,
     ) -> EbookBuildRun:
         """Build one EPUB from existing page runs without calling a provider.
 
@@ -95,6 +101,8 @@ class EbookBuildService:
             java_command: Java executable used for EPUBCheck.
             timeout_seconds: EPUBCheck timeout in seconds.
             report_path: Optional EPUBCheck JSON report destination.
+            require_reviewed: Fail unless every page has a current complete
+                text-fidelity review.
 
         Returns:
             Typed results for every completed build stage.
@@ -133,6 +141,12 @@ class EbookBuildService:
             report_path=report_path,
             workspace=workspace,
         )
+
+        if require_reviewed:
+            try:
+                ReviewStatusService().require_complete(runs)
+            except ReviewStatusError as exc:
+                raise EbookBuildError(str(exc)) from exc
 
         try:
             assembly = self._assembly.assemble(runs, assembly_dir)

@@ -438,3 +438,118 @@ def test_filter_can_show_all_ocr_differences_for_audit() -> None:
 
     assert len(kept) == 1
     assert suppressed == ()
+
+
+def _write_findings(
+    run_dir: Path,
+    *,
+    text: str,
+    finding_id: str = "page-0013-heur-0001",
+) -> None:
+    """Persist one minimal actionable finding snapshot for status tests."""
+    review_dir = run_dir / "review"
+    review_dir.mkdir(parents=True, exist_ok=True)
+    (review_dir / "findings.json").write_text(
+        json.dumps(
+            {
+                "review_model": "TextFidelityReview-v3",
+                "findings": [
+                    {
+                        "finding_id": finding_id,
+                        "page_id": "pdf:test:page:0013",
+                        "page_number": 13,
+                        "gemini_range": [0, len(text)],
+                        "gemini_text": text,
+                    }
+                ],
+                "suppressed_findings": [],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+
+def _status_page_run(tmp_path: Path, text: str) -> EbookPageRunArtifact:
+    """Build one canonical page-run shell for review-status tests."""
+    run_dir = tmp_path / "page-0013"
+    run_dir.mkdir(parents=True, exist_ok=True)
+    source_image = run_dir / "page.jpg"
+    Image.new("RGB", (20, 20), "white").save(source_image)
+    return EbookPageRunArtifact(
+        run_dir=run_dir,
+        page_number=13,
+        page=_page(text),
+        source_image=source_image,
+        source_media_type="image/jpeg",
+    )
+
+
+def test_review_status_distinguishes_unreviewed_pass_and_resolved(
+    tmp_path: Path,
+) -> None:
+    """Strict review status should represent the full human-review lifecycle."""
+    from siftforge.ebook.review import ReviewPageState, ReviewStatusService
+
+    page_run = _status_page_run(tmp_path, "ngày14")
+    service = ReviewStatusService(loader=_FakeLoader(page_run))
+
+    assert service.inspect(tmp_path).pages[0].state is ReviewPageState.NOT_REVIEWED
+
+    review_dir = page_run.run_dir / "review"
+    review_dir.mkdir(parents=True, exist_ok=True)
+    (review_dir / "findings.json").write_text(
+        json.dumps({"findings": [], "suppressed_findings": []}),
+        encoding="utf-8",
+    )
+    assert service.inspect(tmp_path).pages[0].state is ReviewPageState.PASS
+
+    _write_findings(page_run.run_dir, text="ngày14")
+    assert service.inspect(tmp_path).pages[0].state is ReviewPageState.NEEDS_REVIEW
+
+    (review_dir / "resolutions.json").write_text(
+        json.dumps(
+            {
+                "resolutions": [
+                    {
+                        "finding_id": "page-0013-heur-0001",
+                        "decision": "keep_source",
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    status = service.inspect(tmp_path)
+    assert status.pages[0].state is ReviewPageState.RESOLVED
+    assert status.complete is True
+
+
+def test_review_status_detects_stale_finding_after_reextraction(
+    tmp_path: Path,
+) -> None:
+    """A changed normalized page must invalidate old review snapshots."""
+    from siftforge.ebook.review import ReviewPageState, ReviewStatusService
+
+    page_run = _status_page_run(tmp_path, "ngày 14")
+    _write_findings(page_run.run_dir, text="ngày14")
+
+    status = ReviewStatusService(loader=_FakeLoader(page_run)).inspect(tmp_path)
+
+    assert status.pages[0].state is ReviewPageState.STALE
+    assert "no longer matches" in (status.pages[0].stale_reason or "")
+
+
+def test_review_status_strict_gate_rejects_unresolved_findings(
+    tmp_path: Path,
+) -> None:
+    """Strict builds should be able to stop before unresolved text is packaged."""
+    import pytest
+
+    from siftforge.ebook.review import ReviewStatusError, ReviewStatusService
+
+    page_run = _status_page_run(tmp_path, "ngày14")
+    _write_findings(page_run.run_dir, text="ngày14")
+    service = ReviewStatusService(loader=_FakeLoader(page_run))
+
+    with pytest.raises(ReviewStatusError, match="needs_review=1"):
+        service.require_complete(tmp_path)

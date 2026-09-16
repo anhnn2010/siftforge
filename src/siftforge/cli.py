@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import sys
 from collections.abc import Sequence
@@ -37,10 +38,13 @@ from siftforge.ebook.review import (
     LocalOcrError,
     ReviewFilterConfig,
     ReviewResolutionError,
+    ReviewStatusError,
+    ReviewStatusService,
     TesseractOcrConfig,
     TesseractOcrEngine,
     TextReviewError,
     import_review_resolutions,
+    review_status_to_dict,
 )
 from siftforge.extraction.materializers import PDFPageMaterializationError
 from siftforge.extraction.providers import (
@@ -372,6 +376,26 @@ def build_parser() -> argparse.ArgumentParser:
         help="JSON file exported from the text-review HTML report.",
     )
 
+    review_status = ebook_actions.add_parser(
+        "review-status",
+        help=(
+            "Show whether every page has a current text review and all "
+            "actionable findings are resolved."
+        ),
+    )
+    review_status.add_argument(
+        "--runs-root",
+        required=True,
+        type=Path,
+        help="Directory containing canonical page-* extraction runs.",
+    )
+    review_status.add_argument(
+        "--format",
+        choices=("text", "json"),
+        default="text",
+        help="Output format. Defaults to compact text.",
+    )
+
     assemble_book = ebook_actions.add_parser(
         "assemble-book",
         help="Assemble existing v5 page runs into logical book structure.",
@@ -508,6 +532,14 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     build_epub.add_argument(
+        "--require-reviewed",
+        action="store_true",
+        help=(
+            "Fail the build unless every page has a current review and all "
+            "actionable findings have human decisions."
+        ),
+    )
+    build_epub.add_argument(
         "--validate",
         action="store_true",
         help="Run EPUBCheck after packaging the EPUB.",
@@ -641,6 +673,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _run_ebook_review_text(args)
     if args.domain == "ebook" and args.action == "import-review":
         return _run_ebook_import_review(args)
+    if args.domain == "ebook" and args.action == "review-status":
+        return _run_ebook_review_status(args)
     if args.domain == "ebook" and args.action == "assemble-book":
         return _run_ebook_assemble_book(args)
     if args.domain == "ebook" and args.action == "render-xhtml":
@@ -1101,6 +1135,41 @@ def _run_ebook_import_review(args: argparse.Namespace) -> int:
     return 0
 
 
+def _run_ebook_review_status(args: argparse.Namespace) -> int:
+    """Report review completeness without modifying any artifacts."""
+    try:
+        status = ReviewStatusService().inspect(args.runs_root)
+    except (ReviewStatusError, OSError, ValueError) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+
+    if args.format == "json":
+        print(json.dumps(review_status_to_dict(status), ensure_ascii=False, indent=2))
+    else:
+        print(f"pages:       {status.total_pages}")
+        print(f"findings:    {status.finding_count}")
+        print(f"unresolved:  {status.unresolved_count}")
+        for state in (
+            "not_reviewed",
+            "pass",
+            "needs_review",
+            "resolved",
+            "stale",
+        ):
+            count = sum(page.state.value == state for page in status.pages)
+            if count:
+                print(f"{state + ':':<12} {count}")
+        print(f"complete:    {'yes' if status.complete else 'no'}")
+        for page in status.pages:
+            if page.state.value in {"needs_review", "not_reviewed", "stale"}:
+                detail = f" ({page.stale_reason})" if page.stale_reason else ""
+                print(
+                    f"page {page.page_number:04d}: {page.state.value}"
+                    f" unresolved={page.unresolved_count}{detail}"
+                )
+    return 0 if status.complete else 1
+
+
 def _run_ebook_assemble_book(args: argparse.Namespace) -> int:
     """Assemble persisted page evidence into book-level logical structure."""
     runs_root = args.runs_root.expanduser().resolve()
@@ -1204,6 +1273,7 @@ def _run_ebook_build_epub(args: argparse.Namespace) -> int:
             java_command=args.java_command,
             timeout_seconds=args.timeout,
             report_path=args.epubcheck_report,
+            require_reviewed=args.require_reviewed,
         )
     except EbookBuildError as exc:
         print(f"error: {exc}", file=sys.stderr)

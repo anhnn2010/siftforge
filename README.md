@@ -1414,3 +1414,76 @@ On the real page 13 + page 152 probe used while developing this milestone, the
 v1 report exposed 47 findings. The v2 projection/coalescing/filtering pipeline
 reduces that to two actionable findings: the source anomalies `ngày14` and
 `nhi.Tuy`. Twenty-one OCR candidates remain preserved as suppressed audit data.
+
+## Milestone 1I-3 - Review resolution overlay
+
+The HTML text-review report now supports explicit human decisions for every
+actionable finding: **Keep source**, **Use OCR**, **Use suggestion**, or a
+**Manual** replacement. The report is still a standalone local HTML file. It
+stores in-progress choices in browser-local state when available and exports a
+small `siftforge-review-resolutions.json` file; it never writes into normalized
+page evidence directly.
+
+Import the exported decisions with:
+
+```bash
+siftforge ebook import-review \
+  --runs-root runs/18-nam-kim-cuong \
+  --resolutions ~/Downloads/siftforge-review-resolutions.json
+```
+
+The import step validates every finding against the current review artifacts and
+against the current normalized projected text. It then writes additive,
+page-local review artifacts:
+
+```text
+page-NNNN/
+└── review/
+    ├── ocr.json
+    ├── findings.json
+    ├── resolutions.json
+    └── corrections.json
+```
+
+`normalized/page.json` remains immutable. `corrections.json` contains only
+approved text edits, each targeting one deterministic `span_id` plus an exact
+source offset and original-text snapshot. If a page is re-extracted later and
+the old correction no longer matches the source span, book assembly fails
+instead of silently applying a stale edit.
+
+`assemble-book`, `build-epub`, and therefore `convert-pdf` automatically apply
+valid `review/corrections.json` overlays before book-level structural analysis.
+A `Keep source` decision is still persisted as review provenance but produces no
+text edit.
+
+Importing a resolution file replaces the previous imported decision set. This
+keeps the whole-run `review/resolutions.json` consistent with the page-local
+correction overlays that a later EPUB build will actually consume.
+
+## Milestone 1I-4: review completeness and strict build gate
+
+Text-fidelity review can now be audited before packaging:
+
+```bash
+siftforge ebook review-status --runs-root runs/18-nam-kim-cuong
+```
+
+The command classifies every canonical page as `not_reviewed`, `pass`,
+`needs_review`, `resolved`, or `stale`. A stale review is detected when a page
+was re-extracted and the saved finding snapshot no longer matches normalized
+text.
+
+For release-quality builds, opt into the strict gate:
+
+```bash
+siftforge ebook build-epub \
+  --runs-root runs/18-nam-kim-cuong \
+  --output dist/18-nam-kim-cuong.epub \
+  --title "18 Năm Kim Cương" \
+  --language vi \
+  --require-reviewed
+```
+
+Without `--require-reviewed`, existing behavior is unchanged: reviewed
+correction overlays are applied when present, while incomplete review remains a
+warning/workflow concern rather than a hard build dependency.
