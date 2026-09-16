@@ -1211,3 +1211,101 @@ permission errors, or invalid requests stop whole-book extraction even when
 `--continue-on-error` is set. This prevents a known bad credential/quota state
 from causing hundreds of pointless page requests; the checkpoint remains safe to
 resume later with the same command.
+
+## Milestone 1G-8 - EPUB reader compatibility hardening
+
+The EPUB renderer now writes multiple XHTML spine documents instead of forcing
+an entire book into one `text/content.xhtml`. Top-level navigable headings start
+new deterministic `text/section-NNNN.xhtml` documents. A single-document book
+still uses `text/content.xhtml` for backwards compatibility.
+
+The EPUB-ready manifest keeps the legacy `content` field and adds ordered
+`contents` so packaging can build a real multi-item spine:
+
+```json
+{
+  "content": "text/section-0001.xhtml",
+  "contents": [
+    "text/section-0001.xhtml",
+    "text/section-0002.xhtml"
+  ]
+}
+```
+
+Navigation targets are resolved against the XHTML document that actually owns
+the heading ID, and every rendered content document is included in OPF spine
+order. Internal package validation now checks navigation links, footnote links,
+and footnote return links across XHTML files.
+
+Footnote references now always use an explicit XHTML filename even when the
+footnote lives in the same file:
+
+```html
+<a id="ref-1" epub:type="noteref" href="section-0001.xhtml#note-1">1</a>
+```
+
+Footnote bodies are emitted as `aside epub:type="footnote"` with their text in a
+paragraph and with explicit backlinks:
+
+```html
+<aside id="note-1" class="footnote" epub:type="footnote">
+  <p>... <a class="footnote-backlink"
+     href="section-0001.xhtml#ref-1">↩</a></p>
+</aside>
+```
+
+This change is entirely downstream of extraction. Existing page runs do not
+need to be re-extracted; rerunning `build-epub` is enough to rebuild assembly,
+semantic XHTML, navigation, and the final EPUB with the compatibility changes.
+
+## Milestone 1G-9 - Semantic EPUB projection
+
+The EPUB output layer now follows more conventional reflowable-book semantics
+without changing Gemini extraction, page evidence, or `BookDocument`.
+
+Logical titles produce semantic filenames when enough structure is known:
+
+```text
+text/
+├── chapter-0001.xhtml
+├── chapter-0002.xhtml
+├── section-0001.xhtml
+└── endnotes.xhtml
+```
+
+Unknown or unclassified chunks still use deterministic `section-NNNN.xhtml`
+filenames, and simple books without a resolved title boundary may continue to use
+`content.xhtml`.
+
+A title with adjacent supporting labels/subtitles is rendered as one HTML
+`hgroup`. Supporting headings remain separate block elements and retain any
+clickable noteref markup. Verse now uses a `blockquote` with explicit `<br />`
+line boundaries instead of relying on visual block layout.
+
+Source-domain `FootnoteNode` values remain footnotes in the semantic model, but
+the EPUB projection writes them to a dedicated `text/endnotes.xhtml`. Body
+references point directly to the corresponding endnote:
+
+```html
+<a id="ref-1" epub:type="noteref" href="endnotes.xhtml#note-1">1</a>
+```
+
+The endnote has an explicit semantic backlink:
+
+```html
+<li id="note-1" epub:type="endnote">
+  <p>... <a epub:type="backlink"
+     href="chapter-0001.xhtml#ref-1">↩</a></p>
+</li>
+```
+
+This keeps source semantics separate from EPUB representation while avoiding a
+dependency on reader-specific Back-history behavior.
+
+The EPUB navigation document now contains both the normal TOC and a landmarks
+navigation section. Landmarks identify the start of body matter and the endnotes
+section when present. The EPUB-ready manifest records the dedicated endnotes
+path, and packaging validates that it is also part of the ordered spine.
+
+These changes are downstream only. Existing page extraction runs can be reused;
+rerun `build-epub` to regenerate assembly-derived XHTML and the final EPUB.

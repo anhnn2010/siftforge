@@ -348,3 +348,203 @@ def test_navigation_excludes_supporting_subtitle_headings(tmp_path: Path) -> Non
 
     assert "Chương một" in nav
     assert "Thứ Sáu ngày 13" not in nav
+
+
+def test_package_supports_multiple_xhtml_spine_documents(tmp_path: Path) -> None:
+    """Multi-document ready artifacts should become an ordered EPUB spine."""
+    ready = tmp_path / "ready"
+    (ready / "text").mkdir(parents=True)
+    (ready / "styles").mkdir(parents=True)
+    (ready / "semantic").mkdir(parents=True)
+    for index in (1, 2):
+        (ready / "text" / f"section-{index:04d}.xhtml").write_text(
+            '<?xml version="1.0" encoding="utf-8"?>\n'
+            '<html xmlns="http://www.w3.org/1999/xhtml" '
+            'xmlns:epub="http://www.idpf.org/2007/ops" lang="vi">\n'
+            f"<head><title>Chương {index}</title></head>\n"
+            f'<body><h1 id="chapter-{index}">Chương {index}</h1></body>\n'
+            "</html>\n",
+            encoding="utf-8",
+        )
+    (ready / "styles" / "book.css").write_text("body {}\n", encoding="utf-8")
+    (ready / "semantic" / "document.json").write_text(
+        json.dumps(
+            {
+                "title": "Sách thử",
+                "language": "vi",
+                "author": None,
+                "nodes": [
+                    {
+                        "type": "heading",
+                        "node_id": f"chapter-{index}",
+                        "role": "chapter_title",
+                        "level": 1,
+                        "content": [
+                            {
+                                "text": f"Chương {index}",
+                                "language": "vi",
+                                "marks": [],
+                                "role": "text",
+                                "target_id": None,
+                                "source_span_id": None,
+                            }
+                        ],
+                    }
+                    for index in (1, 2)
+                ],
+                "relationships": [],
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    (ready / "manifest.json").write_text(
+        json.dumps(
+            {
+                "format": "epub-ready-xhtml",
+                "source_assembly": "book",
+                "title": "Sách thử",
+                "language": "vi",
+                "author": None,
+                "content": "text/section-0001.xhtml",
+                "contents": [
+                    "text/section-0001.xhtml",
+                    "text/section-0002.xhtml",
+                ],
+                "stylesheet": "styles/book.css",
+                "assets": [],
+                "warnings": [],
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    output = tmp_path / "book.epub"
+
+    EbookEpubPackageService().build(
+        ready,
+        output,
+        modified="2026-09-15T08:00:00Z",
+    )
+
+    with zipfile.ZipFile(output) as archive:
+        package = ElementTree.fromstring(archive.read("EPUB/package.opf"))
+        nav = archive.read("EPUB/nav.xhtml").decode("utf-8")
+        assert "EPUB/text/section-0001.xhtml" in archive.namelist()
+        assert "EPUB/text/section-0002.xhtml" in archive.namelist()
+    ns = {"opf": "http://www.idpf.org/2007/opf"}
+    spine = package.findall("opf:spine/opf:itemref", ns)
+    assert [item.get("idref") for item in spine] == [
+        "content-0001",
+        "content-0002",
+    ]
+    assert 'href="text/section-0001.xhtml#chapter-1"' in nav
+    assert 'href="text/section-0002.xhtml#chapter-2"' in nav
+
+
+def test_navigation_includes_body_and_endnotes_landmarks(tmp_path: Path) -> None:
+    """Dedicated endnotes should be discoverable through EPUB landmarks."""
+    ready = tmp_path / "ready"
+    (ready / "text").mkdir(parents=True)
+    (ready / "styles").mkdir(parents=True)
+    (ready / "semantic").mkdir(parents=True)
+    (ready / "text" / "chapter-0001.xhtml").write_text(
+        '<?xml version="1.0" encoding="utf-8"?>\n'
+        '<html xmlns="http://www.w3.org/1999/xhtml" '
+        'xmlns:epub="http://www.idpf.org/2007/ops" lang="vi">\n'
+        "<head><title>Chương một</title></head>\n"
+        '<body epub:type="bodymatter">'
+        '<h1 id="chapter-1">Chương một</h1>'
+        '<p>Text<sup><a id="ref-1" epub:type="noteref" '
+        'href="endnotes.xhtml#note-1">1</a></sup></p>'
+        "</body></html>\n",
+        encoding="utf-8",
+    )
+    (ready / "text" / "endnotes.xhtml").write_text(
+        '<?xml version="1.0" encoding="utf-8"?>\n'
+        '<html xmlns="http://www.w3.org/1999/xhtml" '
+        'xmlns:epub="http://www.idpf.org/2007/ops" lang="vi">\n'
+        "<head><title>Notes</title></head>\n"
+        '<body epub:type="backmatter">'
+        '<section id="endnotes" epub:type="endnotes"><ol>'
+        '<li id="note-1" epub:type="endnote"><p>Note '
+        '<a epub:type="backlink" href="chapter-0001.xhtml#ref-1">↩</a>'
+        "</p></li></ol></section></body></html>\n",
+        encoding="utf-8",
+    )
+    (ready / "styles" / "book.css").write_text("body {}\n", encoding="utf-8")
+    (ready / "semantic" / "document.json").write_text(
+        json.dumps(
+            {
+                "title": "Sách thử",
+                "language": "vi",
+                "author": None,
+                "nodes": [
+                    {
+                        "type": "heading",
+                        "node_id": "chapter-1",
+                        "role": "chapter_title",
+                        "level": 1,
+                        "content": [
+                            {
+                                "text": "Chương một",
+                                "language": "vi",
+                                "marks": [],
+                                "role": "text",
+                                "target_id": None,
+                                "source_span_id": None,
+                            }
+                        ],
+                    }
+                ],
+                "relationships": [],
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    (ready / "manifest.json").write_text(
+        json.dumps(
+            {
+                "format": "epub-ready-xhtml",
+                "source_assembly": "book",
+                "title": "Sách thử",
+                "language": "vi",
+                "author": None,
+                "content": "text/chapter-0001.xhtml",
+                "contents": [
+                    "text/chapter-0001.xhtml",
+                    "text/endnotes.xhtml",
+                ],
+                "endnotes": "text/endnotes.xhtml",
+                "stylesheet": "styles/book.css",
+                "assets": [],
+                "warnings": [],
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    output = tmp_path / "book.epub"
+
+    EbookEpubPackageService().build(
+        ready,
+        output,
+        modified="2026-09-16T03:00:00Z",
+    )
+
+    with zipfile.ZipFile(output) as archive:
+        nav = archive.read("EPUB/nav.xhtml").decode("utf-8")
+        package = ElementTree.fromstring(archive.read("EPUB/package.opf"))
+
+    assert '<nav epub:type="landmarks" id="landmarks">' in nav
+    assert 'epub:type="bodymatter" href="text/chapter-0001.xhtml"' in nav
+    assert (
+        'epub:type="endnotes" href="text/endnotes.xhtml#endnotes"' in nav
+    )
+    ns = {"opf": "http://www.idpf.org/2007/opf"}
+    spine = package.findall("opf:spine/opf:itemref", ns)
+    assert [item.get("idref") for item in spine] == [
+        "content-0001",
+        "content-0002",
+    ]

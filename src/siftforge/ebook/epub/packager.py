@@ -32,6 +32,15 @@ class EpubTocEntry:
 
 
 @dataclass(frozen=True, slots=True)
+class _ResolvedTocEntry:
+    """One navigation entry bound to the XHTML file containing its target."""
+
+    label: str
+    target_id: str
+    content_relative: PurePosixPath
+
+
+@dataclass(frozen=True, slots=True)
 class EpubPackageResult:
     """Metadata describing one successfully built EPUB archive."""
 
@@ -87,15 +96,17 @@ class EpubPackageBuilder:
         title = _required_nonempty_string(manifest, "title")
         language = _optional_nonempty_string(manifest, "language") or "und"
         author = _optional_nonempty_string(manifest, "author")
-        content_relative = _safe_relative_path(
-            _required_nonempty_string(manifest, "content")
+        content_relatives = _manifest_content_paths(manifest)
+        endnotes_relative = _manifest_endnotes_path(
+            manifest,
+            content_relatives=content_relatives,
         )
         stylesheet_relative = _safe_relative_path(
             _required_nonempty_string(manifest, "stylesheet")
         )
         asset_relatives = _manifest_asset_paths(manifest)
         package_paths = (
-            content_relative,
+            *content_relatives,
             stylesheet_relative,
             *asset_relatives,
         )
@@ -104,7 +115,10 @@ class EpubPackageBuilder:
                 "EPUB-ready manifest paths must not overlap"
             )
 
-        content_source = _require_file(root, content_relative)
+        content_sources = tuple(
+            (relative, _require_file(root, relative))
+            for relative in content_relatives
+        )
         stylesheet_source = _require_file(root, stylesheet_relative)
         asset_sources = tuple(
             (relative, _require_file(root, relative))
@@ -112,13 +126,18 @@ class EpubPackageBuilder:
         )
         semantic_payload = _load_json_object(root / "semantic" / "document.json")
         toc_entries = _collect_toc_entries(semantic_payload)
+        content_id_index = _content_id_index(content_sources)
+        resolved_toc_entries = _resolve_toc_entries(
+            toc_entries,
+            content_id_index=content_id_index,
+        )
 
         resolved_identifier = identifier or _derive_identifier(
             root=root,
             title=title,
             language=language,
             author=author,
-            content_relative=content_relative,
+            content_relatives=content_relatives,
             stylesheet_relative=stylesheet_relative,
             asset_relatives=asset_relatives,
         )
@@ -126,8 +145,8 @@ class EpubPackageBuilder:
             raise EpubPackageError("publication identifier must not be empty")
         resolved_modified = _normalize_modified(modified)
 
-        package_items = _build_manifest_items(
-            content_relative=content_relative,
+        package_items, spine_item_ids = _build_manifest_items(
+            content_relatives=content_relatives,
             stylesheet_relative=stylesheet_relative,
             asset_relatives=asset_relatives,
         )
@@ -138,12 +157,14 @@ class EpubPackageBuilder:
             identifier=resolved_identifier,
             modified=resolved_modified,
             items=package_items,
+            spine_item_ids=spine_item_ids,
         )
         nav_xhtml = _render_nav_xhtml(
             title=title,
             language=language,
-            content_relative=content_relative,
-            entries=toc_entries,
+            default_content=content_relatives[0],
+            endnotes_content=endnotes_relative,
+            entries=resolved_toc_entries,
         )
         container_xml = _render_container_xml()
 
@@ -164,11 +185,12 @@ class EpubPackageBuilder:
                 )
                 _write_zip_text(archive, "EPUB/package.opf", package_opf)
                 _write_zip_text(archive, "EPUB/nav.xhtml", nav_xhtml)
-                _write_zip_bytes(
-                    archive,
-                    f"EPUB/{content_relative.as_posix()}",
-                    content_source.read_bytes(),
-                )
+                for relative, source in content_sources:
+                    _write_zip_bytes(
+                        archive,
+                        f"EPUB/{relative.as_posix()}",
+                        source.read_bytes(),
+                    )
                 _write_zip_bytes(
                     archive,
                     f"EPUB/{stylesheet_relative.as_posix()}",
@@ -231,6 +253,50 @@ def _optional_nonempty_string(
             f"manifest field {key!r} must be null or a non-empty string"
         )
     return value.strip()
+
+
+def _manifest_content_paths(payload: dict[str, Any]) -> tuple[PurePosixPath, ...]:
+    """Load ordered XHTML spine paths from an EPUB-ready manifest."""
+    values = payload.get("contents")
+    if values is None:
+        return (
+            _safe_relative_path(_required_nonempty_string(payload, "content")),
+        )
+    if not isinstance(values, list) or not values:
+        raise EpubPackageError(
+            "manifest field 'contents' must be a non-empty list"
+        )
+    result: list[PurePosixPath] = []
+    for value in values:
+        if not isinstance(value, str) or not value.strip():
+            raise EpubPackageError(
+                "manifest contents must be non-empty strings"
+            )
+        result.append(_safe_relative_path(value))
+    if len(set(result)) != len(result):
+        raise EpubPackageError("manifest contents must not contain duplicates")
+    return tuple(result)
+
+
+def _manifest_endnotes_path(
+    payload: dict[str, Any],
+    *,
+    content_relatives: tuple[PurePosixPath, ...],
+) -> PurePosixPath | None:
+    """Load an optional dedicated endnotes XHTML path from the manifest."""
+    value = payload.get("endnotes")
+    if value is None:
+        return None
+    if not isinstance(value, str) or not value.strip():
+        raise EpubPackageError(
+            "manifest field 'endnotes' must be null or a non-empty string"
+        )
+    relative = _safe_relative_path(value)
+    if relative not in content_relatives:
+        raise EpubPackageError(
+            "manifest endnotes path must also appear in 'contents'"
+        )
+    return relative
 
 
 def _manifest_asset_paths(payload: dict[str, Any]) -> tuple[PurePosixPath, ...]:
@@ -358,13 +424,63 @@ def _needs_navigation_separator(previous: str, current: str) -> bool:
     return True
 
 
+def _content_id_index(
+    content_sources: tuple[tuple[PurePosixPath, Path], ...],
+) -> dict[str, PurePosixPath]:
+    """Map rendered XHTML IDs to their owning spine document."""
+    result: dict[str, PurePosixPath] = {}
+    for relative, source in content_sources:
+        try:
+            root = ElementTree.fromstring(source.read_bytes())
+        except ElementTree.ParseError as exc:
+            raise EpubPackageError(
+                f"invalid XHTML artifact: {relative.as_posix()}"
+            ) from exc
+        for element in root.iter():
+            element_id = element.get("id")
+            if element_id is None:
+                continue
+            existing = result.get(element_id)
+            if existing is not None and existing != relative:
+                raise EpubPackageError(
+                    f"duplicate XHTML id across content documents: {element_id}"
+                )
+            result[element_id] = relative
+    return result
+
+
+def _resolve_toc_entries(
+    entries: tuple[EpubTocEntry, ...],
+    *,
+    content_id_index: dict[str, PurePosixPath],
+) -> tuple[_ResolvedTocEntry, ...]:
+    """Bind semantic TOC targets to rendered XHTML documents."""
+    resolved: list[_ResolvedTocEntry] = []
+    for entry in entries:
+        content_relative = content_id_index.get(entry.target_id)
+        if content_relative is None:
+            raise EpubPackageError(
+                f"navigation target is not rendered: {entry.target_id}"
+            )
+        resolved.append(
+            _ResolvedTocEntry(
+                label=entry.label,
+                target_id=entry.target_id,
+                content_relative=content_relative,
+            )
+        )
+    if not resolved:
+        return ()
+    return tuple(resolved)
+
+
 def _derive_identifier(
     *,
     root: Path,
     title: str,
     language: str,
     author: str | None,
-    content_relative: PurePosixPath,
+    content_relatives: tuple[PurePosixPath, ...],
     stylesheet_relative: PurePosixPath,
     asset_relatives: tuple[PurePosixPath, ...],
 ) -> str:
@@ -374,7 +490,7 @@ def _derive_identifier(
         digest.update(value.encode("utf-8"))
         digest.update(b"\0")
     for relative in (
-        content_relative,
+        *content_relatives,
         stylesheet_relative,
         *sorted(asset_relatives, key=lambda item: item.as_posix()),
     ):
@@ -414,23 +530,31 @@ class _ManifestItem:
 
 def _build_manifest_items(
     *,
-    content_relative: PurePosixPath,
+    content_relatives: tuple[PurePosixPath, ...],
     stylesheet_relative: PurePosixPath,
     asset_relatives: tuple[PurePosixPath, ...],
-) -> tuple[_ManifestItem, ...]:
-    """Build deterministic OPF manifest entries excluding the navigation item."""
-    items = [
-        _ManifestItem(
-            item_id="content",
-            href=content_relative.as_posix(),
-            media_type="application/xhtml+xml",
-        ),
+) -> tuple[tuple[_ManifestItem, ...], tuple[str, ...]]:
+    """Build deterministic OPF items and ordered spine item IDs."""
+    items: list[_ManifestItem] = []
+    spine_ids: list[str] = []
+    multiple = len(content_relatives) > 1
+    for index, relative in enumerate(content_relatives, start=1):
+        item_id = f"content-{index:04d}" if multiple else "content"
+        items.append(
+            _ManifestItem(
+                item_id=item_id,
+                href=relative.as_posix(),
+                media_type="application/xhtml+xml",
+            )
+        )
+        spine_ids.append(item_id)
+    items.append(
         _ManifestItem(
             item_id="css",
             href=stylesheet_relative.as_posix(),
             media_type="text/css",
-        ),
-    ]
+        )
+    )
     for index, relative in enumerate(
         sorted(asset_relatives, key=lambda item: item.as_posix()),
         start=1,
@@ -442,7 +566,7 @@ def _build_manifest_items(
                 media_type=_asset_media_type(relative),
             )
         )
-    return tuple(items)
+    return tuple(items), tuple(spine_ids)
 
 
 def _asset_media_type(relative: PurePosixPath) -> str:
@@ -485,8 +609,9 @@ def _render_package_opf(
     identifier: str,
     modified: str,
     items: tuple[_ManifestItem, ...],
+    spine_item_ids: tuple[str, ...],
 ) -> str:
-    """Render a minimal EPUB 3 package document."""
+    """Render an EPUB 3 package document with an ordered XHTML spine."""
     metadata = [
         f'    <dc:identifier id="pub-id">{_text(identifier)}</dc:identifier>',
         f"    <dc:title>{_text(title)}</dc:title>",
@@ -507,6 +632,10 @@ def _render_package_opf(
         f'media-type="{_attr(item.media_type)}" />'
         for item in items
     )
+    spine_lines = [
+        f'    <itemref idref="{_attr(item_id)}" />'
+        for item_id in spine_item_ids
+    ]
     return (
         '<?xml version="1.0" encoding="utf-8"?>\n'
         '<package xmlns="http://www.idpf.org/2007/opf" '
@@ -518,8 +647,8 @@ def _render_package_opf(
         + "\n".join(manifest_lines)
         + "\n  </manifest>\n"
         + "  <spine>\n"
-        + '    <itemref idref="content" />\n'
-        + "  </spine>\n"
+        + "\n".join(spine_lines)
+        + "\n  </spine>\n"
         + "</package>\n"
     )
 
@@ -528,20 +657,36 @@ def _render_nav_xhtml(
     *,
     title: str,
     language: str,
-    content_relative: PurePosixPath,
-    entries: tuple[EpubTocEntry, ...],
+    default_content: PurePosixPath,
+    endnotes_content: PurePosixPath | None,
+    entries: tuple[_ResolvedTocEntry, ...],
 ) -> str:
-    """Render the EPUB 3 navigation document from semantic headings."""
-    navigation = entries or (EpubTocEntry(label=title, target_id=""),)
+    """Render EPUB 3 TOC plus semantic landmarks navigation."""
     items: list[str] = []
-    for entry in navigation:
-        href = content_relative.as_posix()
-        if entry.target_id:
-            href = f"{href}#{entry.target_id}"
+    if entries:
+        for entry in entries:
+            href = f"{entry.content_relative.as_posix()}#{entry.target_id}"
+            items.append(
+                f'        <li><a href="{_attr(href)}">'
+                f"{_text(entry.label)}</a></li>"
+            )
+    else:
         items.append(
-            f'        <li><a href="{_attr(href)}">'
-            f"{_text(entry.label)}</a></li>"
+            f'        <li><a href="{_attr(default_content.as_posix())}">'
+            f"{_text(title)}</a></li>"
         )
+
+    landmarks = [
+        '        <li><a epub:type="bodymatter" '
+        f'href="{_attr(default_content.as_posix())}">Start of Content</a></li>'
+    ]
+    if endnotes_content is not None:
+        endnotes_href = f"{endnotes_content.as_posix()}#endnotes"
+        landmarks.append(
+            '        <li><a epub:type="endnotes" '
+            f'href="{_attr(endnotes_href)}">Notes</a></li>'
+        )
+
     return (
         '<?xml version="1.0" encoding="utf-8"?>\n'
         '<!DOCTYPE html>\n'
@@ -549,7 +694,7 @@ def _render_nav_xhtml(
         'xmlns:epub="http://www.idpf.org/2007/ops" '
         f'lang="{_attr(language)}" xml:lang="{_attr(language)}">\n'
         "  <head>\n"
-        "    <meta charset=\"utf-8\" />\n"
+        '    <meta charset="utf-8" />\n'
         f"    <title>{_text(title)}</title>\n"
         "  </head>\n"
         "  <body>\n"
@@ -557,6 +702,12 @@ def _render_nav_xhtml(
         f"      <h1>{_text(title)}</h1>\n"
         "      <ol>\n"
         + "\n".join(items)
+        + "\n      </ol>\n"
+        + "    </nav>\n"
+        + '    <nav epub:type="landmarks" id="landmarks">\n'
+        + "      <h2>Landmarks</h2>\n"
+        + "      <ol>\n"
+        + "\n".join(landmarks)
         + "\n      </ol>\n"
         + "    </nav>\n"
         + "  </body>\n"
@@ -589,14 +740,18 @@ def _write_zip_bytes(
 
 
 def _validate_epub_archive(path: Path) -> None:
-    """Perform deterministic structural checks before publishing an EPUB."""
+    """Perform deterministic structural and internal-link checks."""
     try:
         with zipfile.ZipFile(path, "r") as archive:
             infos = archive.infolist()
             if not infos or infos[0].filename != "mimetype":
-                raise EpubPackageError("EPUB mimetype must be the first ZIP member")
+                raise EpubPackageError(
+                    "EPUB mimetype must be the first ZIP member"
+                )
             if infos[0].compress_type != zipfile.ZIP_STORED:
-                raise EpubPackageError("EPUB mimetype must be stored uncompressed")
+                raise EpubPackageError(
+                    "EPUB mimetype must be stored uncompressed"
+                )
             if archive.read("mimetype") != _EPUB_MIMETYPE:
                 raise EpubPackageError("EPUB mimetype content is invalid")
             names = {info.filename for info in infos}
@@ -614,57 +769,137 @@ def _validate_epub_archive(path: Path) -> None:
                 pure = PurePosixPath(name)
                 if pure.is_absolute() or ".." in pure.parts:
                     raise EpubPackageError(f"unsafe EPUB member path: {name}")
+
             container = ElementTree.fromstring(
                 archive.read("META-INF/container.xml")
             )
             rootfile = container.find(
                 ".//{urn:oasis:names:tc:opendocument:xmlns:container}rootfile"
             )
-            if rootfile is None or rootfile.get("full-path") != "EPUB/package.opf":
-                raise EpubPackageError("container.xml does not reference package.opf")
+            if (
+                rootfile is None
+                or rootfile.get("full-path") != "EPUB/package.opf"
+            ):
+                raise EpubPackageError(
+                    "container.xml does not reference package.opf"
+                )
+
             package = ElementTree.fromstring(archive.read("EPUB/package.opf"))
             namespace = {"opf": "http://www.idpf.org/2007/opf"}
-            manifest_items = package.findall(".//opf:manifest/opf:item", namespace)
+            manifest_items = package.findall(
+                ".//opf:manifest/opf:item", namespace
+            )
+            manifest_by_id: dict[str, str] = {}
             for item in manifest_items:
+                item_id = item.get("id")
                 href = item.get("href")
-                if href is None:
-                    raise EpubPackageError("OPF manifest item has no href")
+                if item_id is None or href is None:
+                    raise EpubPackageError(
+                        "OPF manifest item is missing id or href"
+                    )
                 member = f"EPUB/{href}"
                 if member not in names:
                     raise EpubPackageError(
                         f"OPF manifest references missing member: {member}"
                     )
+                manifest_by_id[item_id] = href
+
+            spine = package.findall(".//opf:spine/opf:itemref", namespace)
+            if not spine:
+                raise EpubPackageError("OPF spine must not be empty")
+            content_hrefs: list[str] = []
+            for itemref in spine:
+                item_id = itemref.get("idref")
+                if item_id is None or item_id not in manifest_by_id:
+                    raise EpubPackageError(
+                        "OPF spine references an unknown manifest item"
+                    )
+                content_hrefs.append(manifest_by_id[item_id])
+
+            ids_by_content: dict[str, set[str]] = {}
+            roots_by_content: dict[str, ElementTree.Element] = {}
+            for href in content_hrefs:
+                root = ElementTree.fromstring(archive.read(f"EPUB/{href}"))
+                roots_by_content[href] = root
+                ids_by_content[href] = {
+                    element_id
+                    for element in root.iter()
+                    if (element_id := element.get("id")) is not None
+                }
+
             nav = ElementTree.fromstring(archive.read("EPUB/nav.xhtml"))
-            content_items = [
-                item
-                for item in manifest_items
-                if item.get("id") == "content"
-            ]
-            if len(content_items) != 1:
-                raise EpubPackageError("OPF must contain exactly one content item")
-            content_href = content_items[0].get("href")
-            if content_href is None:
-                raise EpubPackageError("content manifest item has no href")
-            content = ElementTree.fromstring(
-                archive.read(f"EPUB/{content_href}")
-            )
-            content_ids = {
-                element_id
-                for element in content.iter()
-                if (element_id := element.get("id")) is not None
-            }
             xhtml = {"xhtml": "http://www.w3.org/1999/xhtml"}
             for anchor in nav.findall(".//xhtml:a", xhtml):
                 href = anchor.get("href")
-                if href is None or "#" not in href:
-                    continue
-                target_path, fragment = href.split("#", 1)
-                if target_path == content_href and fragment not in content_ids:
-                    raise EpubPackageError(
-                        f"navigation target does not exist: {fragment}"
+                if href is None:
+                    raise EpubPackageError("navigation anchor has no href")
+                _validate_internal_href(
+                    source_href="nav.xhtml",
+                    href=href,
+                    ids_by_content=ids_by_content,
+                    require_content_target=True,
+                )
+
+            for source_href, root in roots_by_content.items():
+                for anchor in root.findall(".//xhtml:a", xhtml):
+                    href = anchor.get("href")
+                    if href is None:
+                        raise EpubPackageError(
+                            f"content anchor has no href: {source_href}"
+                        )
+                    if _is_external_href(href):
+                        continue
+                    _validate_internal_href(
+                        source_href=source_href,
+                        href=href,
+                        ids_by_content=ids_by_content,
+                        require_content_target=False,
                     )
     except KeyError as exc:
         raise EpubPackageError(f"EPUB member is missing: {exc}") from exc
+
+
+def _is_external_href(href: str) -> bool:
+    """Return whether an XHTML hyperlink points outside the EPUB package."""
+    lowered = href.lower()
+    return lowered.startswith(("http:", "https:", "mailto:", "tel:"))
+
+
+def _validate_internal_href(
+    *,
+    source_href: str,
+    href: str,
+    ids_by_content: dict[str, set[str]],
+    require_content_target: bool,
+) -> None:
+    """Validate one relative XHTML link and optional fragment target."""
+    target_path_text, separator, fragment = href.partition("#")
+    source = PurePosixPath(source_href)
+    if target_path_text:
+        target = source.parent / PurePosixPath(target_path_text)
+    else:
+        target = source
+    if target.is_absolute() or ".." in target.parts:
+        raise EpubPackageError(f"unsafe internal EPUB link: {href}")
+    target_href = target.as_posix()
+    if require_content_target and target_href not in ids_by_content:
+        raise EpubPackageError(
+            f"navigation target document is not in spine: {target_href}"
+        )
+    if not separator:
+        if require_content_target and target_href not in ids_by_content:
+            raise EpubPackageError(
+                f"navigation target document is not in spine: {target_href}"
+            )
+        return
+    if target_href not in ids_by_content:
+        raise EpubPackageError(
+            f"internal link target document is not in spine: {target_href}"
+        )
+    if fragment not in ids_by_content[target_href]:
+        raise EpubPackageError(
+            f"internal link target does not exist: {target_href}#{fragment}"
+        )
 
 
 def _text(value: str) -> str:

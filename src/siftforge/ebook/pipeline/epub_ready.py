@@ -91,6 +91,15 @@ class EbookEpubReadyService:
                 "language": language,
                 "author": author,
                 "content": render.content_path.relative_to(output).as_posix(),
+                "contents": [
+                    path.relative_to(output).as_posix()
+                    for path in render.content_paths
+                ],
+                "endnotes": (
+                    render.endnotes_path.relative_to(output).as_posix()
+                    if render.endnotes_path is not None
+                    else None
+                ),
                 "stylesheet": render.stylesheet_path.relative_to(
                     output
                 ).as_posix(),

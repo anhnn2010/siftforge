@@ -13,10 +13,13 @@ from siftforge.ebook.models import (
 from siftforge.ebook.pipeline import EbookEpubReadyService
 from siftforge.ebook.structure import (
     BookDocument,
+    DocumentRelationship,
     DocumentTextSpan,
     FigureNode,
+    FootnoteNode,
     ImageNode,
     ParagraphNode,
+    RelationshipKind,
     book_document_to_dict,
 )
 
@@ -89,3 +92,78 @@ def test_epub_ready_service_loads_assembly_and_writes_xhtml(tmp_path: Path) -> N
     )
     assert manifest["format"] == "epub-ready-xhtml"
     assert manifest["title"] == "Sách thử"
+    assert manifest["content"] == "text/content.xhtml"
+    assert manifest["contents"] == ["text/content.xhtml"]
+
+
+def test_epub_ready_service_projects_footnotes_into_endnotes(
+    tmp_path: Path,
+) -> None:
+    """Source footnotes should persist as dedicated semantic EPUB endnotes."""
+    assembly = tmp_path / "assembly"
+    (assembly / "structure").mkdir(parents=True)
+    document = BookDocument(
+        nodes=(
+            ParagraphNode(
+                node_id="p1",
+                spans=(
+                    DocumentTextSpan(
+                        span_id="s1",
+                        text="Nội dung",
+                        language="vi",
+                        source_typography=_typography(),
+                    ),
+                    DocumentTextSpan(
+                        span_id="ref-1",
+                        text="1",
+                        language=None,
+                        source_typography=_typography(),
+                    ),
+                ),
+            ),
+            FootnoteNode(
+                node_id="note-1",
+                spans=(
+                    DocumentTextSpan(
+                        span_id="note-span-1",
+                        text="Chú thích.",
+                        language="vi",
+                        source_typography=_typography(),
+                    ),
+                ),
+                label="1",
+            ),
+        ),
+        relationships=(
+            DocumentRelationship(
+                relationship_id="rel-1",
+                kind=RelationshipKind.FOOTNOTE_REF,
+                source_id="ref-1",
+                target_id="note-1",
+                confidence=1.0,
+            ),
+        ),
+    )
+    (assembly / "structure" / "book.json").write_text(
+        json.dumps(book_document_to_dict(document), ensure_ascii=False),
+        encoding="utf-8",
+    )
+
+    run = EbookEpubReadyService().build(
+        assembly,
+        tmp_path / "epub-ready",
+        title="Sách thử",
+        language="vi",
+    )
+
+    assert run.render.endnotes_path is not None
+    assert run.render.endnotes_path.name == "endnotes.xhtml"
+    body = run.render.content_path.read_text(encoding="utf-8")
+    endnotes = run.render.endnotes_path.read_text(encoding="utf-8")
+    assert 'href="endnotes.xhtml#note-1"' in body
+    assert 'epub:type="backlink"' in endnotes
+    manifest = json.loads(
+        (run.output_dir / "manifest.json").read_text(encoding="utf-8")
+    )
+    assert manifest["endnotes"] == "text/endnotes.xhtml"
+    assert manifest["contents"][-1] == "text/endnotes.xhtml"
