@@ -282,8 +282,8 @@ def test_graphic_marked_dialogue_remains_paragraphs() -> None:
     assert all(isinstance(node, ParagraphNode) for node in result.document.nodes)
 
 
-def test_cross_page_paragraph_continuation_is_retained_as_candidate() -> None:
-    """Strong cross-page prose evidence should create a scored relation only."""
+def test_cross_page_paragraph_continuation_is_resolved_at_high_confidence() -> None:
+    """Strong cross-page prose evidence should become one logical paragraph."""
     first = _page(
         398,
         _block(
@@ -308,13 +308,125 @@ def test_cross_page_paragraph_continuation_is_retained_as_candidate() -> None:
 
     result = BookStructuralAnalyzer().analyze((first, second))
 
-    assert len(result.continuation_candidates) == 1
-    candidate = result.continuation_candidates[0]
+    assert result.continuation_candidates == ()
+    assert len(result.resolved_continuations) == 1
+    candidate = result.resolved_continuations[0]
     assert candidate.kind is RelationshipKind.CONTINUES_TO
     assert candidate.confidence == 0.99
     assert "previous page ends without terminal punctuation" in candidate.reasons
     assert "next page starts with a lowercase letter" in candidate.reasons
+    assert len(result.document.nodes) == 1
+    paragraph = result.document.nodes[0]
+    assert isinstance(paragraph, ParagraphNode)
+    assert "".join(span.text for span in paragraph.spans) == (
+        "Trong thực tế tôi nhận ra rằng hầu như mọi người cha đều "
+        "mong muốn những điều tốt đẹp cho con."
+    )
+    assert [fragment.page_id for fragment in paragraph.provenance] == [
+        "page-0398",
+        "page-0399",
+    ]
+
+
+def test_page_furniture_does_not_block_real_page_15_16_continuation() -> None:
+    """Page 15 footer/number must not prevent the page-16 prose merge."""
+    first = _page(
+        15,
+        _block(
+            "page-0015",
+            6,
+            BlockRoleHint.PARAGRAPH,
+            (
+                "Và còn biết bao lần khác nữa, biết bao lần mà sự nỗ lực lại "
+                "chính là những khoảnh khắc vượt qua nỗi ngại sợ, vượt qua sự "
+                "biếng lười bản thân, giản dị thế mà sao cần nhiều nghị lực và "
+                "lòng can đảm! Giản dị thế mà mẹ luôn cảm nhận và thấu"
+            ),
+        ),
+        _block(
+            "page-0015",
+            7,
+            BlockRoleHint.PAGE_FOOTER,
+            "Lời mở đầu",
+        ),
+        _block(
+            "page-0015",
+            8,
+            BlockRoleHint.PAGE_NUMBER,
+            "15",
+            language=None,
+        ),
+    )
+    second = _page(
+        16,
+        _block(
+            "page-0016",
+            1,
+            BlockRoleHint.PARAGRAPH,
+            (
+                "hiểu con trong xúc động sâu sắc, mẹ luôn bên con trong từng "
+                "bước trưởng thành cứng cáp của con. Chưa bao giờ mẹ nói ra "
+                "điều ấy, nhưng mẹ đã khóc vì xúc động mỗi khi chứng kiến sự "
+                "nỗ lực, can đảm đến bình thản của con."
+            ),
+        ),
+        _block(
+            "page-0016",
+            6,
+            BlockRoleHint.PAGE_NUMBER,
+            "16",
+            language=None,
+        ),
+        _block(
+            "page-0016",
+            7,
+            BlockRoleHint.PAGE_FOOTER,
+            "18 NĂM KIM CƯƠNG",
+        ),
+    )
+
+    result = BookStructuralAnalyzer().analyze((first, second))
+
+    assert len(result.document.nodes) == 1
+    paragraph = result.document.nodes[0]
+    assert isinstance(paragraph, ParagraphNode)
+    text = "".join(span.text for span in paragraph.spans)
+    assert "mẹ luôn cảm nhận và thấu hiểu con trong xúc động sâu sắc" in text
+    assert {fragment.page_id for fragment in paragraph.provenance} == {
+        "page-0015",
+        "page-0016",
+    }
+    assert len(result.resolved_continuations) == 1
+    assert result.continuation_candidates == ()
+
+
+def test_ambiguous_cross_page_paragraph_remains_candidate() -> None:
+    """A weaker paragraph boundary should remain unresolved for later review."""
+    first = _page(
+        20,
+        _block(
+            "page-0020",
+            1,
+            BlockRoleHint.PARAGRAPH,
+            "Một đoạn có thể vẫn còn tiếp",
+        ),
+    )
+    second = _page(
+        21,
+        _block(
+            "page-0021",
+            1,
+            BlockRoleHint.PARAGRAPH,
+            "Nhưng chữ hoa khiến ranh giới chưa đủ chắc chắn",
+        ),
+    )
+
+    result = BookStructuralAnalyzer().analyze((first, second))
+
     assert len(result.document.nodes) == 2
+    assert len(result.continuation_candidates) == 1
+    assert result.continuation_candidates[0].confidence == 0.80
+    assert result.resolved_continuations == ()
 
 
 def test_terminal_sentence_does_not_create_continuation_candidate() -> None:

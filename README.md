@@ -466,6 +466,31 @@ text, or translation semantics from prose. If v5 page evidence does not expose
 an explicit attribution or quote role, the structural pass leaves that content
 unchanged for a later semantic resolver.
 
+### High-confidence cross-page prose continuation resolution
+
+The structural analyzer now consumes only the strongest paragraph-to-paragraph
+`CONTINUES_TO` candidates. Automatic resolution requires adjacent top-level
+paragraphs and the current maximum confidence (`0.99`), which means the page
+boundary has all strong signals used by the scorer: no terminal punctuation on
+the previous page, a lowercase continuation on the next page, matching known
+language, and compatible boundary typography. Lower-confidence prose, lists,
+and quotations remain unresolved candidates.
+
+Running page furniture is removed before continuation detection, so a footer or
+page number after the final body paragraph does not hide the real page boundary.
+Resolved paragraphs keep both source fragments in provenance. If normal
+inter-word whitespace disappeared at the physical page break, the logical merge
+inserts a synthetic unprovenanced space while leaving all source spans intact.
+The consumed relationship is retained in
+`StructuralAnalysisResult.resolved_continuations` for diagnostics and omitted
+from `BookDocument.relationships`, avoiding a dangling unresolved link later in
+semantic projection.
+
+The regression case from physical pages 15-16 of *18 Năm Kim Cương* now joins
+`"...mẹ luôn cảm nhận và thấu"` with
+`"hiểu con trong xúc động sâu sắc..."` into one logical paragraph containing
+`"...mẹ luôn cảm nhận và thấu hiểu con..."`.
+
 ## Milestone 1F-8 - Real-run golden regression fixture harness
 
 Milestone 1F-8 turns the accepted v5 extraction pages into a checked-in,

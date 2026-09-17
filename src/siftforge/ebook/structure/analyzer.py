@@ -1,9 +1,9 @@
 """Deterministic first-pass structural analysis for ebook page evidence.
 
-Milestone 1F-7 keeps the pass deterministic while resolving explicit
-containers and evidence-backed semantic relationships. Cross-page and
-contextual ambiguity remains scored or unresolved instead of being guessed
-from language-specific content.
+The current pass stays deterministic while resolving explicit containers,
+evidence-backed semantic relationships, and only high-confidence cross-page
+prose continuations. Lower-confidence or non-prose continuation evidence remains
+scored instead of being guessed from language-specific content.
 """
 
 from __future__ import annotations
@@ -90,6 +90,7 @@ class StructuralAnalysisResult:
     running_furniture: tuple[RunningFurnitureOccurrence, ...]
     unresolved_blocks: tuple[PageBlockEvidence, ...] = ()
     container_candidates: tuple[ContainerResolutionCandidate, ...] = ()
+    resolved_continuations: tuple[DocumentRelationship, ...] = ()
 
     @property
     def continuation_candidates(self) -> tuple[DocumentRelationship, ...]:
@@ -114,8 +115,9 @@ class BookStructuralAnalyzer:
     """Build conservative logical structure from ordered page evidence.
 
     Explicit page-local container evidence is grouped without guessing hidden
-    semantics. Running furniture is removed, likely continuations stay scored
-    candidates, and incomplete inset evidence is surfaced for later resolution.
+    semantics. Running furniture is removed, only high-confidence paragraph
+    continuations are resolved, and ambiguous continuation/inset evidence stays
+    visible for later resolution.
     """
 
     def analyze(self, pages: Sequence[PageExtraction]) -> StructuralAnalysisResult:
@@ -139,22 +141,29 @@ class BookStructuralAnalyzer:
             positions,
             node_ids_by_block,
         )
+        resolved_nodes, unresolved_continuations, resolved_continuations = (
+            self._resolve_high_confidence_continuations(
+                nodes,
+                continuation_relationships,
+            )
+        )
         semantic_relationships = self._resolve_semantic_relationships(
             positions,
             nodes,
             node_ids_by_block,
         )
-        relationships = continuation_relationships + semantic_relationships
+        relationships = unresolved_continuations + semantic_relationships
         container_candidates = self._detect_container_candidates(positions)
         normalized_furniture = self._mark_repeated_furniture(furniture)
         return StructuralAnalysisResult(
             document=BookDocument(
-                nodes=tuple(nodes),
+                nodes=resolved_nodes,
                 relationships=relationships,
             ),
             running_furniture=normalized_furniture,
             unresolved_blocks=tuple(unresolved),
             container_candidates=container_candidates,
+            resolved_continuations=resolved_continuations,
         )
 
     def _validate_page_ids(self, pages: Sequence[PageExtraction]) -> None:
@@ -761,6 +770,72 @@ class BookStructuralAnalyzer:
             )
         return tuple(candidates)
 
+    def _resolve_high_confidence_continuations(
+        self,
+        nodes: Sequence[FlowNode],
+        relationships: Sequence[DocumentRelationship],
+    ) -> tuple[
+        tuple[FlowNode, ...],
+        tuple[DocumentRelationship, ...],
+        tuple[DocumentRelationship, ...],
+    ]:
+        """Merge only unambiguous adjacent paragraph continuation chains.
+
+        The continuation detector deliberately emits candidates for a broader
+        set of leaf roles. Automatic resolution is narrower: both logical
+        nodes must be top-level paragraphs, they must be adjacent in logical
+        flow, and the candidate must contain every strong boundary signal used
+        by the current scorer (confidence ``0.99``).
+
+        Consumed relationships are returned separately so diagnostics retain
+        the evidence that justified the merge without leaving dangling
+        ``CONTINUES_TO`` links in ``BookDocument``.
+        """
+        resolvable = {
+            (relationship.source_id, relationship.target_id): relationship
+            for relationship in relationships
+            if relationship.kind is RelationshipKind.CONTINUES_TO
+            and relationship.confidence is not None
+            and relationship.confidence >= 0.99
+        }
+        resolved: list[DocumentRelationship] = []
+        merged_nodes: list[FlowNode] = []
+        index = 0
+
+        while index < len(nodes):
+            current = nodes[index]
+            if not isinstance(current, ParagraphNode):
+                merged_nodes.append(current)
+                index += 1
+                continue
+
+            merged = current
+            chain_index = index
+            while chain_index + 1 < len(nodes):
+                left = nodes[chain_index]
+                right = nodes[chain_index + 1]
+                if not isinstance(left, ParagraphNode) or not isinstance(
+                    right, ParagraphNode
+                ):
+                    break
+                relationship = resolvable.get((left.node_id, right.node_id))
+                if relationship is None:
+                    break
+                merged = _merge_paragraph_nodes(merged, right)
+                resolved.append(relationship)
+                chain_index += 1
+
+            merged_nodes.append(merged)
+            index = chain_index + 1
+
+        resolved_ids = {item.relationship_id for item in resolved}
+        unresolved = tuple(
+            relationship
+            for relationship in relationships
+            if relationship.relationship_id not in resolved_ids
+        )
+        return tuple(merged_nodes), unresolved, tuple(resolved)
+
     def _detect_continuations(
         self,
         pages: Sequence[PageExtraction],
@@ -1080,6 +1155,68 @@ def _document_span(
 def _verse_line_id(block_id: str, line_number: int) -> str:
     """Build a stable line identifier inside one verse evidence block."""
     return f"{block_id}:node:verse-line:{line_number:04d}"
+
+
+def _merge_paragraph_nodes(
+    left: ParagraphNode,
+    right: ParagraphNode,
+) -> ParagraphNode:
+    """Merge adjacent logical prose while preserving source provenance.
+
+    A synthetic unprovenanced space is inserted only when the page boundary
+    itself removed ordinary inter-word whitespace. Source spans remain
+    otherwise unchanged and keep their original page/block provenance.
+    """
+    spans = list(left.spans)
+    if _paragraphs_need_joining_space(left, right):
+        spans.append(_continuation_join_span(left, right))
+    spans.extend(right.spans)
+    return ParagraphNode(
+        node_id=left.node_id,
+        spans=tuple(spans),
+        provenance=left.provenance + right.provenance,
+    )
+
+
+def _paragraphs_need_joining_space(
+    left: ParagraphNode,
+    right: ParagraphNode,
+) -> bool:
+    """Return whether one synthetic space is needed at a merged page break."""
+    left_text = "".join(span.text for span in left.spans)
+    right_text = "".join(span.text for span in right.spans)
+    if not left_text or not right_text:
+        return False
+    if left_text[-1].isspace() or right_text[0].isspace():
+        return False
+    if left_text[-1] in {"-", "‐", "‑", "\u00ad"}:
+        return False
+    if right_text[0] in {",", ".", ";", ":", "!", "?", ")", "]", "}"}:
+        return False
+    return True
+
+
+def _continuation_join_span(
+    left: ParagraphNode,
+    right: ParagraphNode,
+) -> DocumentTextSpan:
+    """Create synthetic whitespace introduced by logical paragraph stitching."""
+    if not left.spans or not right.spans:
+        raise ValueError("continuation join requires non-empty paragraph spans")
+    left_span = left.spans[-1]
+    right_span = right.spans[0]
+    return DocumentTextSpan(
+        span_id=f"{left.node_id}:join:{right.node_id}",
+        text=" ",
+        language=(
+            left_span.language
+            if left_span.language == right_span.language
+            else None
+        ),
+        source_typography=left_span.source_typography,
+        semantic_marks=(),
+        provenance=(),
+    )
 
 
 def _continuation_relationship(

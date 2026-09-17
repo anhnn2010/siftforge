@@ -253,6 +253,16 @@ class EbookBookAssemblyService:
                     }
                     for item in analysis.container_candidates
                 ],
+                "resolved_continuations": [
+                    {
+                        "relationship_id": item.relationship_id,
+                        "source_id": item.source_id,
+                        "target_id": item.target_id,
+                        "confidence": item.confidence,
+                        "reasons": list(item.reasons),
+                    }
+                    for item in analysis.resolved_continuations
+                ],
             },
         )
         store.write_json(
