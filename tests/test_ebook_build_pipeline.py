@@ -177,3 +177,42 @@ def test_build_epub_can_run_optional_epubcheck(
     manifest = json.loads(run.manifest_path.read_text(encoding="utf-8"))
     assert manifest["stages"]["epubcheck"]["requested"] is True
     assert manifest["stages"]["epubcheck"]["passed"] is True
+
+
+def test_build_epub_auto_discovers_metadata_and_cover(tmp_path: Path) -> None:
+    """Builds should consume runs-root metadata.json without repeated CLI flags."""
+    runs = tmp_path / "runs" / "book"
+    runs.mkdir(parents=True)
+    _write_page_run(runs, 1, "Nội dung sách.")
+    cover = runs / "cover.jpg"
+    cover.write_bytes(b"fake-jpeg")
+    (runs / "metadata.json").write_text(
+        json.dumps(
+            {
+                "title": "Sách tự động",
+                "language": "vi",
+                "authors": ["Tác giả"],
+                "publisher": "Nhà xuất bản",
+                "cover": "cover.jpg",
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    output = tmp_path / "book.epub"
+
+    run = EbookBuildService().build(
+        runs,
+        output,
+        work_dir=tmp_path / "work",
+        modified="2026-09-18T05:00:00Z",
+    )
+
+    assert run.epub_ready.metadata.title == "Sách tự động"
+    assert run.epub_ready.cover_image_path is not None
+    with zipfile.ZipFile(output) as archive:
+        opf = archive.read("EPUB/package.opf").decode("utf-8")
+        assert "Sách tự động" in opf
+        assert "Tác giả" in opf
+        assert "Nhà xuất bản" in opf
+        assert 'properties="cover-image"' in opf

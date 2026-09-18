@@ -167,3 +167,72 @@ def test_epub_ready_service_projects_footnotes_into_endnotes(
     )
     assert manifest["endnotes"] == "text/endnotes.xhtml"
     assert manifest["contents"][-1] == "text/endnotes.xhtml"
+
+
+def test_epub_ready_service_persists_rich_metadata_and_cover(
+    tmp_path: Path,
+) -> None:
+    """Metadata JSON should drive title/author data and a real cover spine page."""
+    assembly = tmp_path / "assembly"
+    (assembly / "structure").mkdir(parents=True)
+    document = BookDocument(
+        nodes=(
+            ParagraphNode(
+                node_id="p1",
+                spans=(
+                    DocumentTextSpan(
+                        span_id="s1",
+                        text="Nội dung.",
+                        language="vi",
+                        source_typography=_typography(),
+                    ),
+                ),
+            ),
+        )
+    )
+    (assembly / "structure" / "book.json").write_text(
+        json.dumps(book_document_to_dict(document), ensure_ascii=False),
+        encoding="utf-8",
+    )
+    cover = tmp_path / "cover.jpg"
+    cover.write_bytes(b"fake-jpeg")
+    metadata_path = tmp_path / "metadata.json"
+    metadata_path.write_text(
+        json.dumps(
+            {
+                "title": "Sách metadata",
+                "language": "vi",
+                "authors": ["Tác giả A", "Tác giả B"],
+                "publisher": "Nhà xuất bản",
+                "isbn": "9780000000000",
+                "cover": "cover.jpg",
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+
+    run = EbookEpubReadyService().build(
+        assembly,
+        tmp_path / "epub-ready",
+        metadata_path=metadata_path,
+    )
+
+    assert run.metadata.title == "Sách metadata"
+    assert run.metadata.authors == ("Tác giả A", "Tác giả B")
+    assert run.cover_image_path is not None
+    assert run.cover_content_path is not None
+    assert run.asset_count == 1
+    cover_xhtml = run.cover_content_path.read_text(encoding="utf-8")
+    assert 'epub:type="cover"' in cover_xhtml
+    assert 'src="../assets/cover.jpg"' in cover_xhtml
+    manifest = json.loads(
+        (run.output_dir / "manifest.json").read_text(encoding="utf-8")
+    )
+    assert manifest["contents"][0] == "text/cover.xhtml"
+    assert manifest["content"] == "text/content.xhtml"
+    assert manifest["cover"] == {
+        "image": "assets/cover.jpg",
+        "content": "text/cover.xhtml",
+    }
+    assert manifest["metadata"]["publisher"] == "Nhà xuất bản"

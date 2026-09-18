@@ -8,6 +8,12 @@ import shutil
 from dataclasses import dataclass
 from pathlib import Path
 
+from siftforge.ebook.metadata import (
+    BookMetadata,
+    BookMetadataError,
+    book_metadata_to_dict,
+    resolve_book_metadata,
+)
 from siftforge.ebook.review.status import (
     ReviewStatusError,
     ReviewStatusService,
@@ -67,9 +73,11 @@ class EbookBuildService:
         runs_root: str | Path,
         output_path: str | Path,
         *,
-        title: str,
+        title: str | None = None,
         language: str | None = None,
         author: str | None = None,
+        metadata_path: str | Path | None = None,
+        cover_path: str | Path | None = None,
         work_dir: str | Path | None = None,
         identifier: str | None = None,
         modified: str | None = None,
@@ -89,9 +97,12 @@ class EbookBuildService:
         Args:
             runs_root: Directory containing canonical ``page-*`` extraction runs.
             output_path: Destination final ``.epub`` archive.
-            title: Publication title.
-            language: Optional BCP 47 language tag.
-            author: Optional author metadata.
+            title: Optional publication title override.
+            language: Optional BCP 47 language override.
+            author: Optional single-author override.
+            metadata_path: Optional ``metadata.json``. When omitted, an existing
+                ``<runs-root>/metadata.json`` is discovered automatically.
+            cover_path: Optional cover image override.
             work_dir: Optional derived-artifact workspace. Defaults to a sibling
                 ``<runs-root-name>-build`` directory.
             identifier: Optional publication identifier.
@@ -114,10 +125,24 @@ class EbookBuildService:
         output = Path(output_path).expanduser().resolve()
         if not runs.is_dir():
             raise EbookBuildError(f"page-runs root is not a directory: {runs}")
-        if not title.strip():
-            raise EbookBuildError("book title must not be empty")
         if output.suffix.lower() != ".epub":
             raise EbookBuildError("EPUB output path must end with .epub")
+
+        default_metadata = runs / "metadata.json"
+        resolved_metadata_path = (
+            Path(metadata_path).expanduser().resolve()
+            if metadata_path is not None
+            else (default_metadata if default_metadata.is_file() else None)
+        )
+        try:
+            resolve_book_metadata(
+                metadata_path=resolved_metadata_path,
+                title=title,
+                language=language,
+                author=author,
+            )
+        except BookMetadataError as exc:
+            raise EbookBuildError(str(exc)) from exc
 
         workspace = (
             Path(work_dir).expanduser().resolve()
@@ -156,6 +181,8 @@ class EbookBuildService:
                 title=title,
                 language=language,
                 author=author,
+                metadata_path=resolved_metadata_path,
+                cover_path=cover_path,
             )
             package = self._package.build(
                 epub_ready_dir,
@@ -188,9 +215,8 @@ class EbookBuildService:
             workspace=workspace,
             runs_root=runs,
             output_path=output,
-            title=title,
-            language=language,
-            author=author,
+            metadata=epub_ready.metadata,
+            cover_path=epub_ready.cover_image_path,
             assembly=assembly,
             epub_ready=epub_ready,
             package=package,
@@ -259,9 +285,8 @@ def _write_build_manifest(
     workspace: Path,
     runs_root: Path,
     output_path: Path,
-    title: str,
-    language: str | None,
-    author: str | None,
+    metadata: BookMetadata,
+    cover_path: Path | None,
     assembly: EbookBookAssemblyRun,
     epub_ready: EbookEpubReadyRun,
     package: EbookEpubPackageRun,
@@ -276,9 +301,8 @@ def _write_build_manifest(
         "runs_root": str(runs_root),
         "work_dir": str(workspace),
         "output_epub": str(output_path),
-        "title": title,
-        "language": language,
-        "author": author,
+        "metadata": book_metadata_to_dict(metadata),
+        "cover": str(cover_path) if cover_path is not None else None,
         "stages": {
             "assembly": {
                 "output": "assembly",
@@ -289,7 +313,12 @@ def _write_build_manifest(
             "epub_ready": {
                 "output": "epub-ready",
                 "nodes": len(epub_ready.document.nodes),
-                "assets": len(epub_ready.render.copied_assets),
+                "assets": epub_ready.asset_count,
+                "cover": (
+                    str(epub_ready.cover_image_path)
+                    if epub_ready.cover_image_path is not None
+                    else None
+                ),
                 "warnings": list(epub_ready.warnings),
             },
             "package": {

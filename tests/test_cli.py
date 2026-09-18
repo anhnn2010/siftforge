@@ -395,3 +395,26 @@ def test_import_review_parser_accepts_exported_resolutions() -> None:
 
     assert args.runs_root == Path("runs/book")
     assert args.resolutions == Path("review.json")
+
+
+def test_build_epub_parser_accepts_metadata_without_title_flag() -> None:
+    """Persisted book metadata should make repeated title flags unnecessary."""
+    parser = build_parser()
+    args = parser.parse_args(
+        [
+            "ebook",
+            "build-epub",
+            "--runs-root",
+            "runs/book",
+            "--output",
+            "dist/book.epub",
+            "--metadata",
+            "runs/book/metadata.json",
+            "--cover",
+            "covers/replacement.jpg",
+        ]
+    )
+
+    assert args.title is None
+    assert args.metadata == Path("runs/book/metadata.json")
+    assert args.cover == Path("covers/replacement.jpg")

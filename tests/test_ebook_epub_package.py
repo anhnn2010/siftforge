@@ -548,3 +548,90 @@ def test_navigation_includes_body_and_endnotes_landmarks(tmp_path: Path) -> None
         "content-0001",
         "content-0002",
     ]
+
+
+def test_package_preserves_rich_metadata_and_epub3_cover(tmp_path: Path) -> None:
+    """OPF should expose rich metadata and mark the cover image semantically."""
+    ready = tmp_path / "ready"
+    _write_ready_fixture(ready)
+    cover_image = ready / "assets" / "cover.jpg"
+    cover_image.write_bytes(b"fake-jpeg")
+    cover_xhtml = ready / "text" / "cover.xhtml"
+    cover_xhtml.write_text(
+        '<?xml version="1.0" encoding="utf-8"?>\n'
+        '<html xmlns="http://www.w3.org/1999/xhtml" '
+        'xmlns:epub="http://www.idpf.org/2007/ops">\n'
+        '  <body epub:type="cover"><img src="../assets/cover.jpg" '
+        'alt="Cover" /></body>\n'
+        '</html>\n',
+        encoding="utf-8",
+    )
+    manifest_path = ready / "manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["contents"] = ["text/cover.xhtml", "text/content.xhtml"]
+    manifest["cover"] = {
+        "image": "assets/cover.jpg",
+        "content": "text/cover.xhtml",
+    }
+    manifest["assets"].append("assets/cover.jpg")
+    manifest["metadata"] = {
+        "title": "Sách thử",
+        "subtitle": "Phụ đề",
+        "language": "vi",
+        "authors": ["Tác giả A", "Tác giả B"],
+        "publisher": "Nhà xuất bản",
+        "publication_date": "2026-09-18",
+        "isbn": "9780000000000",
+        "description": "Mô tả.",
+        "subjects": ["Kỹ năng", "Giáo dục"],
+        "rights": "© 2026",
+        "series": "Bộ sách",
+        "series_index": "2",
+        "contributors": ["Người dịch"],
+        "cover": "cover.jpg",
+    }
+    manifest_path.write_text(
+        json.dumps(manifest, ensure_ascii=False),
+        encoding="utf-8",
+    )
+    output = tmp_path / "book.epub"
+
+    EbookEpubPackageService().build(
+        ready,
+        output,
+        modified="2026-09-18T05:00:00Z",
+    )
+
+    with zipfile.ZipFile(output) as archive:
+        opf = ElementTree.fromstring(archive.read("EPUB/package.opf"))
+        nav = archive.read("EPUB/nav.xhtml").decode("utf-8")
+        assert "EPUB/text/cover.xhtml" in archive.namelist()
+        assert "EPUB/assets/cover.jpg" in archive.namelist()
+    ns = {
+        "dc": "http://purl.org/dc/elements/1.1/",
+        "opf": "http://www.idpf.org/2007/opf",
+    }
+    assert [
+        item.text for item in opf.findall("opf:metadata/dc:title", ns)
+    ] == ["Sách thử", "Phụ đề"]
+    assert [
+        item.text for item in opf.findall("opf:metadata/dc:creator", ns)
+    ] == ["Tác giả A", "Tác giả B"]
+    assert opf.findtext("opf:metadata/dc:publisher", namespaces=ns) == (
+        "Nhà xuất bản"
+    )
+    assert opf.findtext("opf:metadata/dc:date", namespaces=ns) == "2026-09-18"
+    identifiers = [
+        item.text for item in opf.findall("opf:metadata/dc:identifier", ns)
+    ]
+    assert "urn:isbn:9780000000000" in identifiers
+    assert [
+        item.text for item in opf.findall("opf:metadata/dc:subject", ns)
+    ] == ["Kỹ năng", "Giáo dục"]
+    items = opf.findall("opf:manifest/opf:item", ns)
+    cover_item = next(item for item in items if item.get("id") == "cover-image")
+    assert cover_item.get("properties") == "cover-image"
+    spine = opf.findall("opf:spine/opf:itemref", ns)
+    assert spine[0].get("idref") == "cover"
+    assert 'epub:type="cover" href="text/cover.xhtml"' in nav
+    assert 'epub:type="bodymatter" href="text/content.xhtml"' in nav

@@ -1,0 +1,21 @@
+{
+  "title": "Tên sách",
+  "subtitle": null,
+  "language": "vi",
+  "authors": [
+    "Tên tác giả"
+  ],
+  "publisher": "Tên nhà xuất bản",
+  "publication_date": "2026-09-18",
+  "isbn": "9780000000000",
+  "description": "Mô tả ngắn về sách.",
+  "subjects": [
+    "Chủ đề 1",
+    "Chủ đề 2"
+  ],
+  "rights": "© Chủ sở hữu bản quyền",
+  "series": null,
+  "series_index": null,
+  "contributors": [],
+  "cover": "cover.jpg"
+}

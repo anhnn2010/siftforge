@@ -14,6 +14,13 @@ from pathlib import Path, PurePosixPath
 from typing import Any
 from xml.etree import ElementTree
 
+from siftforge.ebook.metadata import (
+    BookMetadata,
+    BookMetadataError,
+    book_metadata_from_dict,
+    book_metadata_to_dict,
+)
+
 _EPUB_MIMETYPE = b"application/epub+zip"
 _FIXED_ZIP_TIMESTAMP = (1980, 1, 1, 0, 0, 0)
 _MODIFIED_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$")
@@ -93,10 +100,16 @@ class EpubPackageBuilder:
             raise EpubPackageError(
                 "EPUB-ready manifest has unsupported or missing format"
             )
-        title = _required_nonempty_string(manifest, "title")
-        language = _optional_nonempty_string(manifest, "language") or "und"
-        author = _optional_nonempty_string(manifest, "author")
+        metadata = _manifest_metadata(manifest)
+        if metadata.title is None:
+            raise EpubPackageError("publication metadata title must not be empty")
+        title = metadata.title
+        language = metadata.language or "und"
         content_relatives = _manifest_content_paths(manifest)
+        cover_image_relative, cover_content_relative = _manifest_cover_paths(
+            manifest,
+            content_relatives=content_relatives,
+        )
         endnotes_relative = _manifest_endnotes_path(
             manifest,
             content_relatives=content_relatives,
@@ -105,6 +118,13 @@ class EpubPackageBuilder:
             _required_nonempty_string(manifest, "stylesheet")
         )
         asset_relatives = _manifest_asset_paths(manifest)
+        if (
+            cover_image_relative is not None
+            and cover_image_relative not in asset_relatives
+        ):
+            raise EpubPackageError(
+                "manifest cover image must also appear in 'assets'"
+            )
         package_paths = (
             *content_relatives,
             stylesheet_relative,
@@ -134,9 +154,8 @@ class EpubPackageBuilder:
 
         resolved_identifier = identifier or _derive_identifier(
             root=root,
-            title=title,
+            metadata=metadata,
             language=language,
-            author=author,
             content_relatives=content_relatives,
             stylesheet_relative=stylesheet_relative,
             asset_relatives=asset_relatives,
@@ -149,20 +168,31 @@ class EpubPackageBuilder:
             content_relatives=content_relatives,
             stylesheet_relative=stylesheet_relative,
             asset_relatives=asset_relatives,
+            cover_content_relative=cover_content_relative,
+            cover_image_relative=cover_image_relative,
         )
         package_opf = _render_package_opf(
-            title=title,
+            metadata=metadata,
             language=language,
-            author=author,
             identifier=resolved_identifier,
             modified=resolved_modified,
             items=package_items,
             spine_item_ids=spine_item_ids,
         )
+        default_content = next(
+            (
+                relative
+                for relative in content_relatives
+                if relative != cover_content_relative
+                and relative != endnotes_relative
+            ),
+            content_relatives[0],
+        )
         nav_xhtml = _render_nav_xhtml(
             title=title,
             language=language,
-            default_content=content_relatives[0],
+            default_content=default_content,
+            cover_content=cover_content_relative,
             endnotes_content=endnotes_relative,
             entries=resolved_toc_entries,
         )
@@ -253,6 +283,60 @@ def _optional_nonempty_string(
             f"manifest field {key!r} must be null or a non-empty string"
         )
     return value.strip()
+
+
+def _manifest_metadata(payload: dict[str, Any]) -> BookMetadata:
+    """Load rich metadata while remaining compatible with legacy manifests."""
+    value = payload.get("metadata")
+    if value is None:
+        legacy = {
+            "title": _required_nonempty_string(payload, "title"),
+            "language": _optional_nonempty_string(payload, "language"),
+            "authors": (
+                [_optional_nonempty_string(payload, "author")]
+                if _optional_nonempty_string(payload, "author") is not None
+                else []
+            ),
+        }
+        try:
+            return book_metadata_from_dict(legacy)
+        except BookMetadataError as exc:
+            raise EpubPackageError(str(exc)) from exc
+    if not isinstance(value, dict):
+        raise EpubPackageError("manifest field 'metadata' must be an object")
+    try:
+        metadata = book_metadata_from_dict(value)
+    except BookMetadataError as exc:
+        raise EpubPackageError(str(exc)) from exc
+    if metadata.title is None:
+        raise EpubPackageError("manifest metadata title must not be empty")
+    return metadata
+
+
+def _manifest_cover_paths(
+    payload: dict[str, Any],
+    *,
+    content_relatives: tuple[PurePosixPath, ...],
+) -> tuple[PurePosixPath | None, PurePosixPath | None]:
+    """Load optional cover image/content paths from the ready manifest."""
+    value = payload.get("cover")
+    if value is None:
+        return None, None
+    if not isinstance(value, dict):
+        raise EpubPackageError("manifest field 'cover' must be null or an object")
+    image = value.get("image")
+    content = value.get("content")
+    if not isinstance(image, str) or not image.strip():
+        raise EpubPackageError("manifest cover image must be a non-empty string")
+    if not isinstance(content, str) or not content.strip():
+        raise EpubPackageError("manifest cover content must be a non-empty string")
+    image_relative = _safe_relative_path(image)
+    content_relative = _safe_relative_path(content)
+    if content_relative not in content_relatives:
+        raise EpubPackageError(
+            "manifest cover content must also appear in 'contents'"
+        )
+    return image_relative, content_relative
 
 
 def _manifest_content_paths(payload: dict[str, Any]) -> tuple[PurePosixPath, ...]:
@@ -477,18 +561,25 @@ def _resolve_toc_entries(
 def _derive_identifier(
     *,
     root: Path,
-    title: str,
+    metadata: BookMetadata,
     language: str,
-    author: str | None,
     content_relatives: tuple[PurePosixPath, ...],
     stylesheet_relative: PurePosixPath,
     asset_relatives: tuple[PurePosixPath, ...],
 ) -> str:
     """Derive a stable UUID URN from publication metadata and content bytes."""
     digest = hashlib.sha256()
-    for value in (title, language, author or ""):
-        digest.update(value.encode("utf-8"))
-        digest.update(b"\0")
+    metadata_payload = book_metadata_to_dict(metadata)
+    metadata_payload["language"] = language
+    digest.update(
+        json.dumps(
+            metadata_payload,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("utf-8")
+    )
+    digest.update(b"\0")
     for relative in (
         *content_relatives,
         stylesheet_relative,
@@ -526,6 +617,7 @@ class _ManifestItem:
     item_id: str
     href: str
     media_type: str
+    properties: tuple[str, ...] = ()
 
 
 def _build_manifest_items(
@@ -533,13 +625,22 @@ def _build_manifest_items(
     content_relatives: tuple[PurePosixPath, ...],
     stylesheet_relative: PurePosixPath,
     asset_relatives: tuple[PurePosixPath, ...],
+    cover_content_relative: PurePosixPath | None,
+    cover_image_relative: PurePosixPath | None,
 ) -> tuple[tuple[_ManifestItem, ...], tuple[str, ...]]:
     """Build deterministic OPF items and ordered spine item IDs."""
     items: list[_ManifestItem] = []
     spine_ids: list[str] = []
-    multiple = len(content_relatives) > 1
-    for index, relative in enumerate(content_relatives, start=1):
-        item_id = f"content-{index:04d}" if multiple else "content"
+    body_index = 0
+    body_count = len(content_relatives) - int(cover_content_relative is not None)
+    for relative in content_relatives:
+        if relative == cover_content_relative:
+            item_id = "cover"
+        else:
+            body_index += 1
+            item_id = (
+                f"content-{body_index:04d}" if body_count > 1 else "content"
+            )
         items.append(
             _ManifestItem(
                 item_id=item_id,
@@ -555,15 +656,21 @@ def _build_manifest_items(
             media_type="text/css",
         )
     )
-    for index, relative in enumerate(
-        sorted(asset_relatives, key=lambda item: item.as_posix()),
-        start=1,
-    ):
+    asset_index = 0
+    for relative in sorted(asset_relatives, key=lambda item: item.as_posix()):
+        if relative == cover_image_relative:
+            item_id = "cover-image"
+            properties = ("cover-image",)
+        else:
+            asset_index += 1
+            item_id = f"asset-{asset_index:04d}"
+            properties = ()
         items.append(
             _ManifestItem(
-                item_id=f"asset-{index:04d}",
+                item_id=item_id,
                 href=relative.as_posix(),
                 media_type=_asset_media_type(relative),
+                properties=properties,
             )
         )
     return tuple(items), tuple(spine_ids)
@@ -587,6 +694,14 @@ def _asset_media_type(relative: PurePosixPath) -> str:
         ) from exc
 
 
+def _isbn_identifier(value: str) -> str:
+    """Return an ISBN value in canonical EPUB identifier form."""
+    cleaned = value.strip()
+    if cleaned.lower().startswith("urn:isbn:"):
+        return cleaned
+    return f"urn:isbn:{cleaned}"
+
+
 def _render_container_xml() -> str:
     """Render the mandatory EPUB container document."""
     return (
@@ -603,23 +718,72 @@ def _render_container_xml() -> str:
 
 def _render_package_opf(
     *,
-    title: str,
+    metadata: BookMetadata,
     language: str,
-    author: str | None,
     identifier: str,
     modified: str,
     items: tuple[_ManifestItem, ...],
     spine_item_ids: tuple[str, ...],
 ) -> str:
-    """Render an EPUB 3 package document with an ordered XHTML spine."""
-    metadata = [
+    """Render an EPUB 3 package document with rich publication metadata."""
+    if metadata.title is None:
+        raise EpubPackageError("publication title must not be empty")
+    metadata_lines = [
         f'    <dc:identifier id="pub-id">{_text(identifier)}</dc:identifier>',
-        f"    <dc:title>{_text(title)}</dc:title>",
+        f'    <dc:title id="main-title">{_text(metadata.title)}</dc:title>',
+        '    <meta refines="#main-title" property="title-type">main</meta>',
         f"    <dc:language>{_text(language)}</dc:language>",
     ]
-    if author is not None:
-        metadata.append(f"    <dc:creator>{_text(author)}</dc:creator>")
-    metadata.append(
+    if metadata.subtitle is not None:
+        metadata_lines.extend(
+            [
+                f'    <dc:title id="subtitle">{_text(metadata.subtitle)}</dc:title>',
+                '    <meta refines="#subtitle" property="title-type">subtitle</meta>',
+            ]
+        )
+    for index, author in enumerate(metadata.authors, start=1):
+        metadata_lines.append(
+            f'    <dc:creator id="creator-{index}">{_text(author)}</dc:creator>'
+        )
+    for contributor in metadata.contributors:
+        metadata_lines.append(
+            f"    <dc:contributor>{_text(contributor)}</dc:contributor>"
+        )
+    if metadata.publisher is not None:
+        metadata_lines.append(
+            f"    <dc:publisher>{_text(metadata.publisher)}</dc:publisher>"
+        )
+    if metadata.publication_date is not None:
+        metadata_lines.append(
+            f"    <dc:date>{_text(metadata.publication_date)}</dc:date>"
+        )
+    if metadata.isbn is not None:
+        metadata_lines.append(
+            "    <dc:identifier>"
+            f"{_text(_isbn_identifier(metadata.isbn))}</dc:identifier>"
+        )
+    if metadata.description is not None:
+        metadata_lines.append(
+            f"    <dc:description>{_text(metadata.description)}</dc:description>"
+        )
+    for subject in metadata.subjects:
+        metadata_lines.append(f"    <dc:subject>{_text(subject)}</dc:subject>")
+    if metadata.rights is not None:
+        metadata_lines.append(f"    <dc:rights>{_text(metadata.rights)}</dc:rights>")
+    if metadata.series is not None:
+        metadata_lines.extend(
+            [
+                '    <meta property="belongs-to-collection" id="series">'
+                f"{_text(metadata.series)}</meta>",
+                '    <meta refines="#series" property="collection-type">series</meta>',
+            ]
+        )
+        if metadata.series_index is not None:
+            metadata_lines.append(
+                '    <meta refines="#series" property="group-position">'
+                f"{_text(metadata.series_index)}</meta>"
+            )
+    metadata_lines.append(
         f'    <meta property="dcterms:modified">{_text(modified)}</meta>'
     )
 
@@ -627,11 +791,16 @@ def _render_package_opf(
         '    <item id="nav" href="nav.xhtml" '
         'media-type="application/xhtml+xml" properties="nav" />'
     ]
-    manifest_lines.extend(
-        f'    <item id="{_attr(item.item_id)}" href="{_attr(item.href)}" '
-        f'media-type="{_attr(item.media_type)}" />'
-        for item in items
-    )
+    for item in items:
+        properties = (
+            f' properties="{_attr(" ".join(item.properties))}"'
+            if item.properties
+            else ""
+        )
+        manifest_lines.append(
+            f'    <item id="{_attr(item.item_id)}" href="{_attr(item.href)}" '
+            f'media-type="{_attr(item.media_type)}"{properties} />'
+        )
     spine_lines = [
         f'    <itemref idref="{_attr(item_id)}" />'
         for item_id in spine_item_ids
@@ -641,7 +810,7 @@ def _render_package_opf(
         '<package xmlns="http://www.idpf.org/2007/opf" '
         'version="3.0" unique-identifier="pub-id">\n'
         '  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">\n'
-        + "\n".join(metadata)
+        + "\n".join(metadata_lines)
         + "\n  </metadata>\n"
         + "  <manifest>\n"
         + "\n".join(manifest_lines)
@@ -658,6 +827,7 @@ def _render_nav_xhtml(
     title: str,
     language: str,
     default_content: PurePosixPath,
+    cover_content: PurePosixPath | None,
     endnotes_content: PurePosixPath | None,
     entries: tuple[_ResolvedTocEntry, ...],
 ) -> str:
@@ -676,10 +846,16 @@ def _render_nav_xhtml(
             f"{_text(title)}</a></li>"
         )
 
-    landmarks = [
+    landmarks: list[str] = []
+    if cover_content is not None:
+        landmarks.append(
+            '        <li><a epub:type="cover" '
+            f'href="{_attr(cover_content.as_posix())}">Cover</a></li>'
+        )
+    landmarks.append(
         '        <li><a epub:type="bodymatter" '
         f'href="{_attr(default_content.as_posix())}">Start of Content</a></li>'
-    ]
+    )
     if endnotes_content is not None:
         endnotes_href = f"{endnotes_content.as_posix()}#endnotes"
         landmarks.append(

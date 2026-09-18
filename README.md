@@ -1565,3 +1565,66 @@ reused page counts, OCR cache key, filter policy, and review-model version. Exis
 human `resolutions.json` / `corrections.json` remain separate from this mechanical
 OCR cache and continue to be protected by the review-status and correction drift
 checks.
+
+## Book metadata and cover packaging
+
+SiftForge can keep book-level bibliographic metadata beside the canonical page
+runs instead of repeating it on every build. Put a UTF-8 `metadata.json` in the
+runs root:
+
+```text
+runs/18-nam-kim-cuong/
+├── metadata.json
+├── cover.jpg
+├── page-0001/
+├── page-0002/
+└── ...
+```
+
+A ready-to-copy template is included as `metadata.json`. A complete
+metadata file can contain:
+
+```json
+{
+  "title": "18 Năm Kim Cương",
+  "subtitle": null,
+  "language": "vi",
+  "authors": ["Tên tác giả"],
+  "publisher": "Tên nhà xuất bản",
+  "publication_date": "2026-09-18",
+  "isbn": "9780000000000",
+  "description": "Mô tả ngắn về sách.",
+  "subjects": ["Kỹ năng sống", "Giáo dục"],
+  "rights": "© Chủ sở hữu bản quyền",
+  "series": null,
+  "series_index": null,
+  "contributors": [],
+  "cover": "cover.jpg"
+}
+```
+
+`cover` is resolved relative to `metadata.json`. JPEG, PNG, GIF, and SVG cover
+images are supported. `build-epub` automatically discovers
+`<runs-root>/metadata.json`, so the normal provider-free build can become:
+
+```bash
+siftforge ebook build-epub \
+  --runs-root runs/18-nam-kim-cuong \
+  --output dist/18-nam-kim-cuong.epub
+```
+
+Use `--metadata` when the JSON lives elsewhere, or `--cover` to override only
+the cover image. Existing `--title`, `--language`, and `--author` flags remain
+supported and take precedence over the corresponding persisted metadata.
+
+The EPUB-ready stage persists normalized metadata, copies the cover into the
+self-contained build artifacts, and creates `text/cover.xhtml`. The final EPUB
+package writes standard Dublin Core/EPUB 3 metadata for title, subtitle,
+authors, contributors, language, publisher, publication date, ISBN,
+description, subjects, rights, and series information. The cover image is
+marked with the EPUB 3 `cover-image` manifest property and the cover is added to
+both the spine and landmarks navigation.
+
+This is deliberately a book-level layer. Page OCR/extraction artifacts remain
+unchanged, so correcting metadata or replacing a cover only requires rerunning
+the provider-free EPUB build; no Gemini extraction is needed.

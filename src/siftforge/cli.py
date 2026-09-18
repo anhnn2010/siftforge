@@ -187,8 +187,8 @@ def build_parser() -> argparse.ArgumentParser:
     )
     convert_pdf.add_argument(
         "--title",
-        required=True,
-        help="Book title used by semantic XHTML and EPUB metadata.",
+        default=None,
+        help="Optional title override. Otherwise read from metadata.json.",
     )
     convert_pdf.add_argument(
         "--runs-root",
@@ -204,7 +204,22 @@ def build_parser() -> argparse.ArgumentParser:
     convert_pdf.add_argument(
         "--author",
         default=None,
-        help="Optional book author metadata.",
+        help="Optional single-author override.",
+    )
+    convert_pdf.add_argument(
+        "--metadata",
+        type=Path,
+        default=None,
+        help=(
+            "Optional metadata.json with title, authors, publisher, ISBN, "
+            "description, subjects, series, and cover."
+        ),
+    )
+    convert_pdf.add_argument(
+        "--cover",
+        type=Path,
+        default=None,
+        help="Optional cover image override (JPEG, PNG, GIF, or SVG).",
     )
     convert_pdf.add_argument(
         "--work-dir",
@@ -439,8 +454,8 @@ def build_parser() -> argparse.ArgumentParser:
     )
     render_xhtml.add_argument(
         "--title",
-        required=True,
-        help="Book title used by the semantic XHTML document.",
+        default=None,
+        help="Optional title override. Otherwise read from metadata.json.",
     )
     render_xhtml.add_argument(
         "--language",
@@ -450,7 +465,19 @@ def build_parser() -> argparse.ArgumentParser:
     render_xhtml.add_argument(
         "--author",
         default=None,
-        help="Optional book author metadata.",
+        help="Optional single-author override.",
+    )
+    render_xhtml.add_argument(
+        "--metadata",
+        type=Path,
+        default=None,
+        help="Optional rich book metadata JSON file.",
+    )
+    render_xhtml.add_argument(
+        "--cover",
+        type=Path,
+        default=None,
+        help="Optional cover image override (JPEG, PNG, GIF, or SVG).",
     )
 
     package_epub = ebook_actions.add_parser(
@@ -504,8 +531,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     build_epub.add_argument(
         "--title",
-        required=True,
-        help="Book title used by semantic XHTML and EPUB metadata.",
+        default=None,
+        help=(
+            "Optional title override. Otherwise use <runs-root>/metadata.json "
+            "or --metadata."
+        ),
     )
     build_epub.add_argument(
         "--language",
@@ -515,7 +545,22 @@ def build_parser() -> argparse.ArgumentParser:
     build_epub.add_argument(
         "--author",
         default=None,
-        help="Optional book author metadata.",
+        help="Optional single-author override.",
+    )
+    build_epub.add_argument(
+        "--metadata",
+        type=Path,
+        default=None,
+        help=(
+            "Optional metadata.json. Defaults to <runs-root>/metadata.json "
+            "when that file exists."
+        ),
+    )
+    build_epub.add_argument(
+        "--cover",
+        type=Path,
+        default=None,
+        help="Optional cover image override (JPEG, PNG, GIF, or SVG).",
     )
     build_epub.add_argument(
         "--work-dir",
@@ -1004,6 +1049,8 @@ def _run_ebook_convert_pdf(args: argparse.Namespace) -> int:
             runs_root=args.runs_root,
             language=args.language,
             author=args.author,
+            metadata_path=args.metadata,
+            cover_path=args.cover,
             work_dir=args.work_dir,
             identifier=args.identifier,
             modified=args.modified,
@@ -1212,13 +1259,15 @@ def _run_ebook_render_xhtml(args: argparse.Namespace) -> int:
             title=args.title,
             language=args.language,
             author=args.author,
+            metadata_path=args.metadata,
+            cover_path=args.cover,
         )
     except EbookEpubReadyError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
 
     print(f"nodes:    {len(run.document.nodes)}")
-    print(f"assets:   {len(run.render.copied_assets)}")
+    print(f"assets:   {run.asset_count}")
     print(f"warnings: {len(run.warnings)}")
     print(f"output:   {run.output_dir}")
     print("result: EPUB-ready XHTML saved to text/content.xhtml")
@@ -1278,6 +1327,8 @@ def _run_ebook_build_epub(args: argparse.Namespace) -> int:
             title=args.title,
             language=args.language,
             author=args.author,
+            metadata_path=args.metadata,
+            cover_path=args.cover,
             work_dir=args.work_dir,
             identifier=args.identifier,
             modified=args.modified,
@@ -1295,7 +1346,7 @@ def _run_ebook_build_epub(args: argparse.Namespace) -> int:
     print(f"pages:      {len(run.assembly.page_runs)}")
     print(f"nodes:      {len(run.assembly.document.nodes)}")
     print(f"figures:    {len(run.assembly.figure_assets)}")
-    print(f"assets:     {len(run.epub_ready.render.copied_assets)}")
+    print(f"assets:     {run.epub_ready.asset_count}")
     print(f"work:       {run.work_dir}")
     print(f"epub:       {run.package.package.epub_path}")
     print(f"identifier: {run.package.package.identifier}")

@@ -6,6 +6,7 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 
+from siftforge.ebook.metadata import BookMetadataError, resolve_book_metadata
 from siftforge.extraction.providers import Extractor
 
 from .book_extraction import (
@@ -69,10 +70,12 @@ class EbookPdfToEpubService:
         output_path: str | Path,
         *,
         model: str,
-        title: str,
+        title: str | None = None,
         runs_root: str | Path | None = None,
         language: str | None = None,
         author: str | None = None,
+        metadata_path: str | Path | None = None,
+        cover_path: str | Path | None = None,
         work_dir: str | Path | None = None,
         identifier: str | None = None,
         modified: str | None = None,
@@ -96,10 +99,12 @@ class EbookPdfToEpubService:
             pdf_path: Input scanned PDF.
             output_path: Destination final ``.epub`` archive.
             model: Provider model identity used for all page extraction.
-            title: Publication title.
+            title: Optional publication title override.
             runs_root: Optional canonical page-run root.
-            language: Optional BCP 47 publication language.
-            author: Optional publication author.
+            language: Optional BCP 47 publication language override.
+            author: Optional single-author override.
+            metadata_path: Optional ``metadata.json`` for rich book metadata.
+            cover_path: Optional cover image override.
             work_dir: Optional provider-free build workspace.
             identifier: Optional publication identifier.
             modified: Optional deterministic EPUB modified timestamp.
@@ -133,8 +138,21 @@ class EbookPdfToEpubService:
 
         if not model.strip():
             raise EbookPdfToEpubError("model must not be empty")
-        if not title.strip():
-            raise EbookPdfToEpubError("book title must not be empty")
+        default_metadata = root / "metadata.json"
+        resolved_metadata_path = (
+            Path(metadata_path).expanduser().resolve()
+            if metadata_path is not None
+            else (default_metadata if default_metadata.is_file() else None)
+        )
+        try:
+            resolve_book_metadata(
+                metadata_path=resolved_metadata_path,
+                title=title,
+                language=language,
+                author=author,
+            )
+        except BookMetadataError as exc:
+            raise EbookPdfToEpubError(str(exc)) from exc
 
         try:
             extraction = self._extraction.extract_book(
@@ -157,6 +175,8 @@ class EbookPdfToEpubService:
                     title=title,
                     language=language,
                     author=author,
+                    metadata_path=resolved_metadata_path,
+                    cover_path=cover_path,
                     work_dir=workspace,
                     identifier=identifier,
                     modified=modified,

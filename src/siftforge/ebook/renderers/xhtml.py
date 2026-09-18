@@ -843,6 +843,23 @@ body {
   line-height: 1.5;
   margin: 5%;
 }
+.cover-body {
+  margin: 0;
+  padding: 0;
+  text-align: center;
+}
+.cover-page {
+  height: 100vh;
+  margin: 0;
+  padding: 0;
+}
+.book-cover {
+  height: 100%;
+  max-height: 100vh;
+  max-width: 100%;
+  object-fit: contain;
+  width: auto;
+}
 img {
   height: auto;
   max-width: 100%;
