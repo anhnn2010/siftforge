@@ -118,7 +118,10 @@ def build_parser() -> argparse.ArgumentParser:
 
     extract_metadata = ebook_actions.add_parser(
         "extract-metadata",
-        help="Suggest reviewable book metadata from PDF front-matter pages.",
+        help=(
+            "Suggest book metadata and extract a detected cover from PDF "
+            "front matter."
+        ),
     )
     extract_metadata.add_argument(
         "--pdf", required=True, type=Path, help="Path to the input scanned PDF."
@@ -133,7 +136,10 @@ def build_parser() -> argparse.ArgumentParser:
         help="Destination metadata.json. Defaults to runs/<pdf-stem>/metadata.json.",
     )
     extract_metadata.add_argument(
-        "--start-page", type=int, default=1, help="First front-matter page. Defaults to 1."
+        "--start-page",
+        type=int,
+        default=1,
+        help="First front-matter page. Defaults to 1.",
     )
     extract_metadata.add_argument(
         "--end-page", type=int, default=8, help="Last front-matter page. Defaults to 8."
@@ -898,7 +904,7 @@ def _run_ebook_extract_metadata(args: argparse.Namespace) -> int:
         ExtractionRoutingError,
         EbookMetadataExtractionError,
     ) as exc:
-        print(f"error: {exc}", file=sys.stderr)
+        _print_extraction_error(exc)
         return 2
 
     print(f"pages:    {run.selected_pages[0]}-{run.selected_pages[-1]}")
@@ -909,6 +915,10 @@ def _run_ebook_extract_metadata(args: argparse.Namespace) -> int:
     print(f"language: {run.metadata.language or '[unknown]'}")
     if run.cover_page_number is not None:
         print(f"cover candidate page: {run.cover_page_number}")
+    if run.cover_path is not None:
+        print(f"cover:    {run.cover_path}")
+    else:
+        print("cover:    [not extracted]")
     if run.warnings:
         print("review warnings:")
         for warning in run.warnings:
@@ -916,6 +926,28 @@ def _run_ebook_extract_metadata(args: argparse.Namespace) -> int:
     print("result: review/edit metadata.json before building the EPUB")
     return 0
 
+
+
+def _print_extraction_error(error: Exception) -> None:
+    """Print a concise provider-safe extraction failure diagnostic."""
+    print(f"error: {error}", file=sys.stderr)
+    if not isinstance(error, ExtractionRoutingError):
+        return
+
+    if error.attempts:
+        print("provider attempts:", file=sys.stderr)
+        for attempt in error.attempts:
+            route = attempt.metadata.get("route", "unknown")
+            error_type = attempt.metadata.get("error_type", "unknown")
+            reason = attempt.reason or "unknown"
+            print(
+                f"- {route}: {reason} ({error_type})",
+                file=sys.stderr,
+            )
+
+    detail = str(error.last_error).strip()
+    if detail:
+        print(f"provider detail: {detail}", file=sys.stderr)
 
 def _run_ebook_extract_page(args: argparse.Namespace) -> int:
     """Execute one-page Gemini extraction using the selected ebook contract."""

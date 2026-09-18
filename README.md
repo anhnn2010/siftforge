@@ -1581,7 +1581,7 @@ runs/18-nam-kim-cuong/
 └── ...
 ```
 
-A ready-to-copy template is included as `metadata.json`. A complete
+A ready-to-copy template is included as `metadata.example.json`. A complete
 metadata file can contain:
 
 ```json
@@ -1628,3 +1628,50 @@ both the spine and landmarks navigation.
 This is deliberately a book-level layer. Page OCR/extraction artifacts remain
 unchanged, so correcting metadata or replacing a cover only requires rerunning
 the provider-free EPUB build; no Gemini extraction is needed.
+
+### Suggest book metadata and extract the cover from PDF front matter
+
+SiftForge can ask Gemini to inspect a small front-matter page range, write a
+reviewable `metadata.json`, and automatically persist the detected front cover.
+The command does not package the EPUB automatically; review or edit the generated
+metadata first.
+
+```bash
+siftforge ebook extract-metadata \
+  --pdf 18-nam-kim-cuong.pdf \
+  --model gemini-3.6-flash
+```
+
+By default SiftForge inspects physical PDF pages 1-8 and writes:
+
+```text
+runs/18-nam-kim-cuong/metadata.json
+runs/18-nam-kim-cuong/metadata-extraction.json
+runs/18-nam-kim-cuong/cover.jpg    # when a cover is confidently detected
+```
+
+When Gemini identifies a confident `cover_page_number`, SiftForge uses the already
+materialized source page to create `cover.jpg` and writes `"cover": "cover.jpg"`
+into `metadata.json`. Embedded JPEG cover bytes are copied directly so no image
+quality is lost; other materialized image encodings are converted to JPEG only when
+needed.
+
+If no cover can be identified confidently, metadata extraction still succeeds and
+leaves `cover` unset. `metadata.json` contains only package-ready bibliographic
+fields. The diagnostic `metadata-extraction.json` keeps the selected page numbers,
+Gemini attempt provenance, warnings, page-role suggestions, and a `cover_extraction`
+record describing whether the cover was extracted, skipped, or failed.
+
+Use a narrower or wider front-matter range when needed:
+
+```bash
+siftforge ebook extract-metadata \
+  --pdf 18-nam-kim-cuong.pdf \
+  --model gemini-3.6-flash \
+  --start-page 1 \
+  --end-page 12
+```
+
+The extractor intentionally leaves unknown values as `null`/empty arrays and is
+instructed not to guess from filenames or outside knowledge. Review the generated
+`metadata.json` before `build-epub`.

@@ -23,6 +23,10 @@ _JPEG_BYTES = b"\xff\xd8\xff\xe0metadata-fixture\xff\xd9"
 class FakeMetadataExtractor:
     """Return deterministic bibliographic metadata without a network request."""
 
+    def __init__(self, cover_page_number: int | None = 1) -> None:
+        """Store the deterministic cover-page suggestion for this fake."""
+        self._cover_page_number = cover_page_number
+
     def extract(self, task: ExtractionTask) -> ExtractionResult:
         """Return metadata plus front-matter page-role hints."""
         assert task.capability == "ebook.book_metadata"
@@ -41,7 +45,7 @@ class FakeMetadataExtractor:
             "series": None,
             "series_index": None,
             "contributors": ["Dịch giả: B"],
-            "cover_page_number": 1,
+            "cover_page_number": self._cover_page_number,
             "title_page_number": 2,
             "copyright_page_number": 2,
             "warnings": ["Review publication date."],
@@ -87,7 +91,9 @@ def _make_pdf(path: Path, page_count: int = 2) -> None:
         writer.write(handle)
 
 
-def test_metadata_extraction_writes_reviewable_metadata_and_report(tmp_path: Path) -> None:
+def test_metadata_extraction_writes_reviewable_metadata_and_report(
+    tmp_path: Path,
+) -> None:
     """Suggested metadata should be persisted separately from extraction diagnostics."""
     pdf = tmp_path / "book.pdf"
     _make_pdf(pdf)
@@ -103,15 +109,53 @@ def test_metadata_extraction_writes_reviewable_metadata_and_report(tmp_path: Pat
     assert run.metadata.title == "18 Năm Kim Cương"
     assert run.metadata.authors == ("Tác giả A",)
     assert run.cover_page_number == 1
+    assert run.cover_path == output.parent / "cover.jpg"
+    assert run.cover_path.read_bytes() == _JPEG_BYTES + bytes([0])
     assert run.selected_pages == (1, 2)
     assert run.warnings == ("Review publication date.",)
 
     metadata = json.loads(output.read_text(encoding="utf-8"))
     assert metadata["title"] == "18 Năm Kim Cương"
-    assert metadata["cover"] is None
+    assert metadata["cover"] == "cover.jpg"
     assert "cover_page_number" not in metadata
 
     report = json.loads(run.report_path.read_text(encoding="utf-8"))
     assert report["cover_page_number"] == 1
+    assert report["cover_extraction"] == {
+        "status": "extracted",
+        "page_number": 1,
+        "path": str(output.parent / "cover.jpg"),
+        "source_media_type": "image/jpeg",
+        "transcoded": False,
+    }
     assert report["title_page_number"] == 2
     assert report["provider_attempts"][0]["provider"] == "fake"
+
+
+def test_metadata_extraction_keeps_metadata_when_cover_is_not_detected(
+    tmp_path: Path,
+) -> None:
+    """Missing cover evidence should not make metadata extraction fail."""
+    pdf = tmp_path / "book.pdf"
+    _make_pdf(pdf)
+    output = tmp_path / "runs" / "book" / "metadata.json"
+
+    run = EbookPDFMetadataExtractionService(
+        FakeMetadataExtractor(cover_page_number=None)
+    ).extract(
+        pdf_path=pdf,
+        output_path=output,
+        start_page=1,
+        end_page=2,
+    )
+
+    assert run.cover_page_number is None
+    assert run.cover_path is None
+    assert run.metadata.cover is None
+    assert not (output.parent / "cover.jpg").exists()
+
+    report = json.loads(run.report_path.read_text(encoding="utf-8"))
+    assert report["cover_extraction"] == {
+        "status": "not-detected",
+        "page_number": None,
+    }

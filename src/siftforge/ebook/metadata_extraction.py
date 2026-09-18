@@ -3,14 +3,22 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
-from siftforge.ebook.extraction import EBOOK_METADATA_PROMPT_V1, EBOOK_METADATA_SCHEMA_V1
-from siftforge.ebook.metadata import BookMetadata, book_metadata_from_dict, write_book_metadata
+from siftforge.ebook.cover import EbookCoverExtractionError, persist_cover_asset
+from siftforge.ebook.extraction import (
+    EBOOK_METADATA_PROMPT_V1,
+    EBOOK_METADATA_SCHEMA_V1,
+)
+from siftforge.ebook.metadata import (
+    BookMetadata,
+    book_metadata_from_dict,
+    write_book_metadata,
+)
 from siftforge.extraction.materializers import PDFPageMaterializer
-from siftforge.extraction.models import ExtractionTask, SourceRef
+from siftforge.extraction.models import ExtractionTask, MaterializedAsset, SourceRef
 from siftforge.extraction.providers import Extractor
 from siftforge.extraction.sources import PDFSource
 
@@ -31,6 +39,7 @@ class EbookMetadataExtractionRun:
     title_page_number: int | None
     copyright_page_number: int | None
     warnings: tuple[str, ...]
+    cover_path: Path | None
 
 
 class EbookPDFMetadataExtractionService:
@@ -103,18 +112,29 @@ class EbookPDFMetadataExtractionService:
             )
 
         metadata = book_metadata_from_dict(payload)
+        cover_page_number = _optional_positive_int(payload, "cover_page_number")
+        warnings = list(_string_tuple(payload.get("warnings"), "warnings"))
+        cover_path, cover_report = _extract_detected_cover(
+            assets=assets,
+            cover_page_number=cover_page_number,
+            destination_dir=destination.parent,
+            warnings=warnings,
+        )
+        if cover_path is not None:
+            metadata = replace(metadata, cover=cover_path.name)
         write_book_metadata(metadata, destination)
         report_path = destination.with_name("metadata-extraction.json")
         report = {
             "schema_version": "1",
             "source_pdf": str(pdf),
             "selected_pages": list(selected_pages),
-            "cover_page_number": _optional_positive_int(payload, "cover_page_number"),
+            "cover_page_number": cover_page_number,
+            "cover_extraction": cover_report,
             "title_page_number": _optional_positive_int(payload, "title_page_number"),
             "copyright_page_number": _optional_positive_int(
                 payload, "copyright_page_number"
             ),
-            "warnings": _string_tuple(payload.get("warnings"), "warnings"),
+            "warnings": warnings,
             "provider_attempts": [
                 {
                     "mechanism": attempt.mechanism,
@@ -140,7 +160,57 @@ class EbookPDFMetadataExtractionService:
             title_page_number=report["title_page_number"],
             copyright_page_number=report["copyright_page_number"],
             warnings=tuple(report["warnings"]),
+            cover_path=cover_path,
         )
+
+
+def _extract_detected_cover(
+    *,
+    assets: tuple[MaterializedAsset, ...],
+    cover_page_number: int | None,
+    destination_dir: Path,
+    warnings: list[str],
+) -> tuple[Path | None, dict[str, object]]:
+    """Persist a confident cover-page asset without failing metadata extraction."""
+    if cover_page_number is None:
+        return None, {"status": "not-detected", "page_number": None}
+
+    asset = next(
+        (
+            item
+            for item in assets
+            if item.source.metadata.get("page_number") == cover_page_number
+        ),
+        None,
+    )
+    if asset is None:
+        warning = (
+            f"Detected cover page {cover_page_number} is outside the selected "
+            "front-matter pages; cover was not extracted."
+        )
+        warnings.append(warning)
+        return None, {
+            "status": "page-not-selected",
+            "page_number": cover_page_number,
+        }
+
+    try:
+        cover = persist_cover_asset(asset, destination_dir=destination_dir)
+    except EbookCoverExtractionError as exc:
+        warnings.append(f"Cover extraction failed: {exc}")
+        return None, {
+            "status": "failed",
+            "page_number": cover_page_number,
+            "reason": str(exc),
+        }
+
+    return cover.path, {
+        "status": "extracted",
+        "page_number": cover.source_page_number,
+        "path": str(cover.path),
+        "source_media_type": cover.source_media_type,
+        "transcoded": cover.transcoded,
+    }
 
 
 def _optional_positive_int(payload: dict[str, Any], key: str) -> int | None:
