@@ -693,11 +693,13 @@ runs/18-nam-kim-cuong-xhtml/
         └── figure-*.png
 ```
 
-The semantic projector deliberately drops source typography as a rendering
-instruction. Italic source glyphs do not become `<em>` and bold glyphs do not
-become `<strong>` unless a prior semantic pass has explicitly populated
-`SemanticMark`. This preserves the conclusion from real pages 162 and 348:
-visual source typography and semantic emphasis are separate concepts.
+The semantic projector keeps source appearance separate from semantic markup.
+Italic source glyphs are preserved as a non-semantic presentation hint and
+rendered with `.source-italic { font-style: italic; }`; they do **not** become
+`<em>`. Likewise, semantic `<em>`/`<strong>` markup is emitted only when a prior
+semantic pass explicitly populated `SemanticMark`. This preserves the conclusion
+from real pages 162 and 348: visual source typography and semantic emphasis are
+separate concepts while still retaining visible italics in the final EPUB.
 
 The projection currently maps explicit logical structure into XHTML-safe
 semantics:

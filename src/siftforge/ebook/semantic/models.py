@@ -1,8 +1,8 @@
 """EPUB-ready semantic models derived from logical book structure.
 
-These models deliberately omit source typography. Visual evidence remains in the
-upstream ``BookDocument`` while this layer contains only semantics that a
-reflowable ebook renderer may safely turn into markup.
+The semantic layer keeps meaning separate from source appearance. A minimal set
+of presentation hints may survive projection when reflowable output can safely
+preserve visible source styling without turning it into semantic markup.
 """
 
 from __future__ import annotations
@@ -20,6 +20,12 @@ class InlineRole(StrEnum):
     FOOTNOTE_REF = "footnote_ref"
 
 
+class InlinePresentation(StrEnum):
+    """Non-semantic visual presentation safe to preserve in reflowable output."""
+
+    ITALIC = "italic"
+
+
 @dataclass(frozen=True, slots=True)
 class SemanticInline:
     """One inline text fragment safe for semantic ebook rendering."""
@@ -27,6 +33,7 @@ class SemanticInline:
     text: str
     language: str | None
     marks: tuple[SemanticMark, ...] = ()
+    presentations: tuple[InlinePresentation, ...] = ()
     role: InlineRole = InlineRole.TEXT
     target_id: str | None = None
     source_span_id: str | None = None

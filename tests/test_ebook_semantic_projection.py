@@ -13,6 +13,7 @@ from siftforge.ebook.models import (
 )
 from siftforge.ebook.semantic import (
     EbookSemanticProjector,
+    InlinePresentation,
     InlineRole,
     SemanticFigure,
     SemanticFootnote,
@@ -80,6 +81,7 @@ def test_projection_does_not_infer_emphasis_from_source_italic() -> None:
     paragraph = result.document.nodes[0]
     assert isinstance(paragraph, SemanticParagraph)
     assert paragraph.content[0].marks == ()
+    assert paragraph.content[0].presentations == (InlinePresentation.ITALIC,)
 
 
 def test_projection_preserves_explicit_semantic_marks() -> None:

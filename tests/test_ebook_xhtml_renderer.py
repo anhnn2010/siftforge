@@ -4,6 +4,7 @@ from pathlib import Path
 
 from siftforge.ebook.renderers import EpubReadyXhtmlRenderer
 from siftforge.ebook.semantic import (
+    InlinePresentation,
     InlineRole,
     SemanticBookDocument,
     SemanticFigure,
@@ -49,6 +50,41 @@ def test_renderer_does_not_emit_source_style_without_semantic_marks(
 
     assert "<em>" not in xhtml
     assert "<strong>" not in xhtml
+
+
+def test_renderer_preserves_source_italic_without_semantic_emphasis(
+    tmp_path: Path,
+) -> None:
+    """Source italics should remain visual styling without becoming ``em``."""
+    document = SemanticBookDocument(
+        title="Book",
+        language="vi",
+        author=None,
+        nodes=(
+            SemanticParagraph(
+                node_id="p1",
+                content=(
+                    _inline(
+                        "chữ nghiêng",
+                        presentations=(InlinePresentation.ITALIC,),
+                    ),
+                ),
+            ),
+        ),
+    )
+
+    result = EpubReadyXhtmlRenderer().render(
+        document,
+        asset_root=tmp_path,
+        output_root=tmp_path / "out",
+    )
+    xhtml = result.content_path.read_text(encoding="utf-8")
+    css = result.stylesheet_path.read_text(encoding="utf-8")
+
+    assert '<span class="source-italic">chữ nghiêng</span>' in xhtml
+    assert "<em>chữ nghiêng</em>" not in xhtml
+    assert ".source-italic" in css
+    assert "font-style: italic" in css
 
 
 def test_renderer_emits_explicit_emphasis(tmp_path: Path) -> None:

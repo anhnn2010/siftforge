@@ -1,6 +1,7 @@
 """EPUB-ready semantic ebook projection."""
 
 from .models import (
+    InlinePresentation,
     InlineRole,
     SemanticAttribution,
     SemanticBookDocument,
@@ -27,6 +28,7 @@ from .serialization import semantic_book_to_dict
 
 __all__: list[str] = [
     "EbookSemanticProjector",
+    "InlinePresentation",
     "InlineRole",
     "SemanticAttribution",
     "SemanticBookDocument",

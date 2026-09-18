@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from siftforge.ebook.semantic import (
+    InlinePresentation,
     InlineRole,
     SemanticAttribution,
     SemanticBookDocument,
@@ -773,7 +774,7 @@ def _render_inlines(
     *,
     context: _RenderContext,
 ) -> str:
-    """Render semantic inline fragments without consulting source typography."""
+    """Render semantic inline fragments plus explicit presentation hints."""
     return "".join(_render_inline(value, context=context) for value in values)
 
 
@@ -784,6 +785,8 @@ def _render_inline(value: SemanticInline, *, context: _RenderContext) -> str:
         rendered = f"<strong>{rendered}</strong>"
     if SemanticMark.EMPHASIS in value.marks:
         rendered = f"<em>{rendered}</em>"
+    if InlinePresentation.ITALIC in value.presentations:
+        rendered = f'<span class="source-italic">{rendered}</span>'
     if value.language is not None:
         language = html.escape(value.language, quote=True)
         rendered = (
@@ -851,6 +854,9 @@ figure {
 figcaption,
 .attribution {
   margin-top: 0.5em;
+}
+.source-italic {
+  font-style: italic;
 }
 .heading-group {
   margin: 1em 0;

@@ -121,6 +121,7 @@ def _inline_to_dict(value: SemanticInline) -> dict[str, Any]:
         "text": value.text,
         "language": value.language,
         "marks": [mark.value for mark in value.marks],
+        "presentations": [item.value for item in value.presentations],
         "role": value.role.value,
         "target_id": value.target_id,
         "source_span_id": value.source_span_id,

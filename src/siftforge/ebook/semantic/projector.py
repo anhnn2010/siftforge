@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from siftforge.ebook.models import FontPosture
 from siftforge.ebook.structure import (
     AttributionNode,
     BookDocument,
@@ -26,6 +27,7 @@ from siftforge.ebook.structure import (
 )
 
 from .models import (
+    InlinePresentation,
     InlineRole,
     SemanticAttribution,
     SemanticBookDocument,
@@ -60,9 +62,10 @@ class SemanticProjectionResult:
 class EbookSemanticProjector:
     """Convert ``BookDocument`` into semantics safe for reflowable XHTML.
 
-    Source typography is intentionally ignored. Only explicit ``SemanticMark``
-    values may become ``em``/``strong`` markup downstream. This prevents an
-    italic base typeface from being misrepresented as semantic emphasis.
+    Source typography never becomes semantic ``em``/``strong`` markup by
+    inference. Safe visual presentation, such as source italics, is projected
+    separately so reflowable output can preserve appearance without changing
+    meaning.
     """
 
     def project(
@@ -211,7 +214,7 @@ def _project_spans(
     spans: tuple[DocumentTextSpan, ...],
     footnote_refs: dict[str, str],
 ) -> tuple[SemanticInline, ...]:
-    """Project text spans without inferring semantics from source typography."""
+    """Project text spans while keeping source appearance non-semantic."""
     projected: list[SemanticInline] = []
     for span in spans:
         target_id = footnote_refs.get(span.span_id)
@@ -220,6 +223,11 @@ def _project_spans(
                 text=span.text,
                 language=span.language,
                 marks=span.semantic_marks,
+                presentations=(
+                    (InlinePresentation.ITALIC,)
+                    if span.source_typography.posture is FontPosture.ITALIC
+                    else ()
+                ),
                 role=(
                     InlineRole.FOOTNOTE_REF
                     if target_id is not None
