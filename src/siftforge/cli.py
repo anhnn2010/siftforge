@@ -9,6 +9,10 @@ import sys
 from collections.abc import Sequence
 from pathlib import Path
 
+from siftforge.ebook.metadata_extraction import (
+    EbookMetadataExtractionError,
+    EbookPDFMetadataExtractionService,
+)
 from siftforge.ebook.evaluation import (
     GoldenFixtureError,
     GoldenRegressionEvaluator,
@@ -111,6 +115,30 @@ def build_parser() -> argparse.ArgumentParser:
         help="Artifact directory. Defaults to runs/<pdf-stem>/page-NNNN.",
     )
     _add_gemini_routing_arguments(extract_page)
+
+    extract_metadata = ebook_actions.add_parser(
+        "extract-metadata",
+        help="Suggest reviewable book metadata from PDF front-matter pages.",
+    )
+    extract_metadata.add_argument(
+        "--pdf", required=True, type=Path, help="Path to the input scanned PDF."
+    )
+    extract_metadata.add_argument(
+        "--model", required=True, help="Explicit Gemini model ID."
+    )
+    extract_metadata.add_argument(
+        "--output",
+        type=Path,
+        default=None,
+        help="Destination metadata.json. Defaults to runs/<pdf-stem>/metadata.json.",
+    )
+    extract_metadata.add_argument(
+        "--start-page", type=int, default=1, help="First front-matter page. Defaults to 1."
+    )
+    extract_metadata.add_argument(
+        "--end-page", type=int, default=8, help="Last front-matter page. Defaults to 8."
+    )
+    _add_gemini_routing_arguments(extract_metadata)
 
     extract_book = ebook_actions.add_parser(
         "extract-book",
@@ -718,6 +746,8 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     if args.domain == "ebook" and args.action == "extract-page":
         return _run_ebook_extract_page(args)
+    if args.domain == "ebook" and args.action == "extract-metadata":
+        return _run_ebook_extract_metadata(args)
     if args.domain == "ebook" and args.action == "extract-book":
         return _run_ebook_extract_book(args)
     if args.domain == "ebook" and args.action == "convert-pdf":
@@ -839,6 +869,52 @@ def _build_gemini_extractor(
         "set SIFTFORGE_GEMINI_FREE_API_KEY for free-first routing, or "
         "GEMINI_API_KEY/GOOGLE_API_KEY for legacy single-profile Gemini"
     )
+
+
+def _run_ebook_extract_metadata(args: argparse.Namespace) -> int:
+    """Suggest reviewable book-level metadata from selected front matter."""
+    pdf_path = args.pdf.expanduser().resolve()
+    output = (
+        args.output.expanduser().resolve()
+        if args.output is not None
+        else (Path.cwd() / "runs" / pdf_path.stem / "metadata.json").resolve()
+    )
+    try:
+        provider = _build_gemini_extractor(
+            model=args.model,
+            routing_policy=RoutingPolicy(args.routing_policy),
+        )
+        run = EbookPDFMetadataExtractionService(provider).extract(
+            pdf_path=pdf_path,
+            output_path=output,
+            start_page=args.start_page,
+            end_page=args.end_page,
+        )
+    except (
+        FileNotFoundError,
+        ValueError,
+        PDFPageMaterializationError,
+        GeminiProviderError,
+        ExtractionRoutingError,
+        EbookMetadataExtractionError,
+    ) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+
+    print(f"pages:    {run.selected_pages[0]}-{run.selected_pages[-1]}")
+    print(f"metadata: {run.metadata_path}")
+    print(f"report:   {run.report_path}")
+    print(f"title:    {run.metadata.title or '[unknown]'}")
+    print(f"authors:  {', '.join(run.metadata.authors) or '[unknown]'}")
+    print(f"language: {run.metadata.language or '[unknown]'}")
+    if run.cover_page_number is not None:
+        print(f"cover candidate page: {run.cover_page_number}")
+    if run.warnings:
+        print("review warnings:")
+        for warning in run.warnings:
+            print(f"- {warning}")
+    print("result: review/edit metadata.json before building the EPUB")
+    return 0
 
 
 def _run_ebook_extract_page(args: argparse.Namespace) -> int:

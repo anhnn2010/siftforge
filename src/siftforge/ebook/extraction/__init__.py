@@ -11,6 +11,7 @@ from .contracts import (
     EBOOK_PAGE_SCHEMA_V5,
 )
 from .evidence_normalizer import EbookPageEvidenceNormalizer
+from .metadata_contract import EBOOK_METADATA_PROMPT_V1, EBOOK_METADATA_SCHEMA_V1
 from .normalizer import EbookPageNormalizationError, EbookPageNormalizer
 
 __all__: list[str] = [
@@ -22,6 +23,8 @@ __all__: list[str] = [
     "EBOOK_PAGE_SCHEMA",
     "EBOOK_PAGE_SCHEMA_V4",
     "EBOOK_PAGE_SCHEMA_V5",
+    "EBOOK_METADATA_PROMPT_V1",
+    "EBOOK_METADATA_SCHEMA_V1",
     "EbookPageEvidenceNormalizer",
     "EbookPageNormalizationError",
     "EbookPageNormalizer",

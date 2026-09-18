@@ -9,6 +9,7 @@ from .metadata import (
     merge_book_metadata,
     resolve_book_metadata,
     resolve_metadata_cover,
+    write_book_metadata,
 )
 
 __all__: list[str] = [
@@ -20,4 +21,5 @@ __all__: list[str] = [
     "merge_book_metadata",
     "resolve_book_metadata",
     "resolve_metadata_cover",
+    "write_book_metadata",
 ]

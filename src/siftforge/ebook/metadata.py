@@ -114,6 +114,22 @@ def book_metadata_to_dict(metadata: BookMetadata) -> dict[str, object]:
     }
 
 
+
+def write_book_metadata(metadata: BookMetadata, path: str | Path) -> Path:
+    """Persist book metadata as stable UTF-8 JSON and return its path."""
+    destination = Path(path).expanduser().resolve()
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    destination.write_text(
+        json.dumps(
+            book_metadata_to_dict(metadata),
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    return destination
+
 def merge_book_metadata(
     base: BookMetadata | None,
     *,
