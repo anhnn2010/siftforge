@@ -30,6 +30,8 @@ from siftforge.ebook.pipeline import (
     EbookEpubReadyError,
     EbookEpubReadyService,
     EbookEpubValidationError,
+    EbookProofError,
+    EbookProofService,
     EbookEpubValidationService,
     EbookPDFBookEvidenceExtractionService,
     EbookPDFPageEvidenceExtractionService,
@@ -514,15 +516,45 @@ def build_parser() -> argparse.ArgumentParser:
         help="Optional cover image override (JPEG, PNG, GIF, or SVG).",
     )
 
-    package_epub = ebook_actions.add_parser(
-        "package-epub",
-        help="Package EPUB-ready XHTML artifacts into a final EPUB 3 file.",
+    prepare_proof = ebook_actions.add_parser(
+        "prepare-proof",
+        help=(
+            "Freeze generated EPUB-ready artifacts into a protected "
+            "human-editable proof workspace."
+        ),
     )
-    package_epub.add_argument(
+    prepare_proof.add_argument(
         "--epub-ready",
         required=True,
         type=Path,
-        help="Directory produced by the render-xhtml command.",
+        help="Generated EPUB-ready directory to copy into proof ownership.",
+    )
+    prepare_proof.add_argument(
+        "--output",
+        required=True,
+        type=Path,
+        help="Destination proof workspace, for example <build-root>/proof.",
+    )
+    prepare_proof.add_argument(
+        "--force",
+        action="store_true",
+        help="Explicitly replace an existing proof workspace and human edits.",
+    )
+
+    package_epub = ebook_actions.add_parser(
+        "package-epub",
+        help="Package EPUB-ready or human-proofed XHTML into a final EPUB 3 file.",
+    )
+    package_source = package_epub.add_mutually_exclusive_group(required=True)
+    package_source.add_argument(
+        "--epub-ready",
+        type=Path,
+        help="Generated EPUB-ready directory produced by render-xhtml.",
+    )
+    package_source.add_argument(
+        "--proof",
+        type=Path,
+        help="Human-owned proof workspace produced by prepare-proof.",
     )
     package_epub.add_argument(
         "--output",
@@ -768,6 +800,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _run_ebook_assemble_book(args)
     if args.domain == "ebook" and args.action == "render-xhtml":
         return _run_ebook_render_xhtml(args)
+    if args.domain == "ebook" and args.action == "prepare-proof":
+        return _run_ebook_prepare_proof(args)
     if args.domain == "ebook" and args.action == "package-epub":
         return _run_ebook_package_epub(args)
     if args.domain == "ebook" and args.action == "build-epub":
@@ -1382,13 +1416,43 @@ def _run_ebook_render_xhtml(args: argparse.Namespace) -> int:
     return 0
 
 
+def _run_ebook_prepare_proof(args: argparse.Namespace) -> int:
+    """Freeze generated XHTML into a protected human proofreading workspace."""
+    source = args.epub_ready.expanduser().resolve()
+    output = args.output.expanduser().resolve()
+    try:
+        run = EbookProofService().prepare(
+            source,
+            output,
+            force=args.force,
+        )
+    except EbookProofError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+
+    print(f"proof:     {run.proof_dir}")
+    print(f"editable:  {run.editable_count} XHTML files")
+    print(f"manifest:  {run.manifest_path}")
+    print("result: human-owned proof workspace prepared")
+    return 0
+
+
 def _run_ebook_package_epub(args: argparse.Namespace) -> int:
-    """Package persisted EPUB-ready XHTML into one EPUB 3 archive."""
-    epub_ready = args.epub_ready.expanduser().resolve()
+    """Package generated or human-proofed XHTML into one EPUB 3 archive."""
+    proof_status = None
+    if args.proof is not None:
+        package_root = args.proof.expanduser().resolve()
+        try:
+            proof_status = EbookProofService().inspect(package_root)
+        except EbookProofError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 2
+    else:
+        package_root = args.epub_ready.expanduser().resolve()
     output = args.output.expanduser().resolve()
     try:
         run = EbookEpubPackageService().build(
-            epub_ready,
+            package_root,
             output,
             identifier=args.identifier,
             modified=args.modified,
@@ -1402,6 +1466,8 @@ def _run_ebook_package_epub(args: argparse.Namespace) -> int:
     print(f"modified:   {run.package.modified}")
     print(f"manifest:   {run.package.manifest_item_count} items")
     print(f"toc:        {run.package.toc_entry_count} entries")
+    if proof_status is not None:
+        print(f"proof edits:{proof_status.modified_count:>4} XHTML files")
     print("result: structurally checked EPUB 3 package created")
     return 0
 

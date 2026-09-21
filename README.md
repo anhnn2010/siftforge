@@ -701,6 +701,14 @@ semantic pass explicitly populated `SemanticMark`. This preserves the conclusion
 from real pages 162 and 348: visual source typography and semantic emphasis are
 separate concepts while still retaining visible italics in the final EPUB.
 
+Inline XHTML is deliberately kept TTS-friendly. Runs whose language matches the
+document inherit `lang`/`xml:lang` from the XHTML root instead of being wrapped
+in redundant per-run spans. A source-italic run therefore renders as a single
+`<span class="source-italic">…</span>` inside its paragraph; an explicit language
+span is emitted only for a real language change. Provider Markdown delimiters
+such as `**…**` are also removed when the same whole run already carries
+structural styling, so those markers cannot leak into readable EPUB text.
+
 The projection currently maps explicit logical structure into XHTML-safe
 semantics:
 
@@ -1675,3 +1683,75 @@ siftforge ebook extract-metadata \
 The extractor intentionally leaves unknown values as `null`/empty arrays and is
 instructed not to guess from filenames or outside knowledge. Review the generated
 `metadata.json` before `build-epub`.
+
+## Human proofreading workspace
+
+Generated `epub-ready/` XHTML remains a derived artifact and is rebuilt by
+`build-epub`. Final human proofreading therefore has a separate ownership
+boundary. After a normal build, freeze the current EPUB-ready tree once:
+
+```bash
+siftforge ebook prepare-proof \
+  --epub-ready runs/18-nam-kim-cuong-build/epub-ready \
+  --output runs/18-nam-kim-cuong-build/proof
+```
+
+The proof workspace is a self-contained, packageable copy:
+
+```text
+runs/18-nam-kim-cuong-build/
+├── assembly/                 # generated; safe to rebuild
+├── epub-ready/               # generated; safe to rebuild
+└── proof/                    # human-owned; do not regenerate casually
+    ├── proof-manifest.json
+    ├── manifest.json
+    ├── semantic/
+    ├── styles/
+    ├── assets/
+    └── text/
+        ├── cover.xhtml
+        ├── chapter-0001.xhtml
+        ├── chapter-0002.xhtml
+        └── ...
+```
+
+Open `proof/text/chapter-XXXX.xhtml` in an editor and make final textual or
+presentation corrections there. Preserve XHTML structure, element IDs, links,
+and filenames; the proof layer is intended for final proofreading rather than
+book-structure redesign. `proof-manifest.json` records SHA-256 baselines for the
+editable XHTML files so SiftForge can report how many have changed.
+
+A proof workspace is protected by default. Running `prepare-proof` again against
+an existing destination fails instead of erasing human edits. `--force` exists
+only as an explicit escape hatch when the user intentionally wants to discard
+the current proof and recreate it from generated XHTML.
+
+Once proofreading has started, package directly from proof rather than running
+`build-epub` for the final artifact:
+
+```bash
+siftforge ebook package-epub \
+  --proof runs/18-nam-kim-cuong-build/proof \
+  --output dist/18-nam-kim-cuong.epub
+```
+
+`package-epub --proof` validates the proof manifest, reports the number of
+edited XHTML files, and then uses the same structural EPUB packaging checks as
+the generated path. A later `build-epub` may safely regenerate `assembly/` and
+`epub-ready/`; it does not touch the sibling `proof/` directory.
+
+The intended ownership boundary is therefore:
+
+```text
+normalized extraction + corrections
+            ↓
+      BookDocument
+            ↓
+ SemanticBookDocument
+            ↓
+ epub-ready/                 MACHINE-OWNED / REGENERATABLE
+            ↓ prepare-proof (once)
+ proof/text/*.xhtml          HUMAN-OWNED / FINAL EDITABLE COPY
+            ↓ package-epub --proof
+ final EPUB                  DISTRIBUTION COPY
+```

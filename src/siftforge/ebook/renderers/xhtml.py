@@ -46,6 +46,7 @@ class _RenderContext:
     """Cross-document link context used while rendering one XHTML file."""
 
     current_document: str
+    document_language: str | None
     locator_by_id: dict[str, str]
     backlinks_by_target: dict[str, tuple[str, ...]]
 
@@ -99,6 +100,7 @@ class EpubReadyXhtmlRenderer:
             content_path = text_dir / chunk.filename
             context = _RenderContext(
                 current_document=chunk.filename,
+                document_language=document.language,
                 locator_by_id=locator_by_id,
                 backlinks_by_target=backlinks_by_target,
             )
@@ -118,6 +120,7 @@ class EpubReadyXhtmlRenderer:
             endnotes_path = text_dir / "endnotes.xhtml"
             context = _RenderContext(
                 current_document=endnotes_path.name,
+                document_language=document.language,
                 locator_by_id=locator_by_id,
                 backlinks_by_target=backlinks_by_target,
             )
@@ -779,19 +782,31 @@ def _render_inlines(
 
 
 def _render_inline(value: SemanticInline, *, context: _RenderContext) -> str:
-    """Render one inline with semantic marks, language, and note links."""
-    rendered = html.escape(value.text)
+    """Render one inline while avoiding redundant DOM boundaries.
+
+    Inline language inherits from the document unless it actually changes. Source
+    presentation and a differing language are collapsed into one ``span`` where
+    possible so TTS engines do not see gratuitous nested/sibling wrappers.
+    """
+    text = _strip_redundant_markdown_style_markers(value)
+    rendered = html.escape(text)
     if SemanticMark.STRONG in value.marks:
         rendered = f"<strong>{rendered}</strong>"
     if SemanticMark.EMPHASIS in value.marks:
         rendered = f"<em>{rendered}</em>"
+
+    attributes: list[str] = []
     if InlinePresentation.ITALIC in value.presentations:
-        rendered = f'<span class="source-italic">{rendered}</span>'
-    if value.language is not None:
+        attributes.append('class="source-italic"')
+    if (
+        value.language is not None
+        and value.language != context.document_language
+    ):
         language = html.escape(value.language, quote=True)
-        rendered = (
-            f'<span lang="{language}" xml:lang="{language}">{rendered}</span>'
-        )
+        attributes.extend((f'lang="{language}"', f'xml:lang="{language}"'))
+    if attributes:
+        rendered = f"<span {' '.join(attributes)}>{rendered}</span>"
+
     if value.role is InlineRole.FOOTNOTE_REF:
         if value.target_id is None:
             raise ValueError("footnote reference has no target")
@@ -812,6 +827,35 @@ def _render_inline(value: SemanticInline, *, context: _RenderContext) -> str:
             "</sup>"
         )
     return rendered
+
+
+def _strip_redundant_markdown_style_markers(value: SemanticInline) -> str:
+    """Remove whole-run Markdown style delimiters already represented structurally.
+
+    Extraction providers can occasionally return text such as ``**Title**`` while
+    the same span already carries source italic/bold information. Keeping those
+    delimiters makes them literal ebook text and can also create audible TTS
+    hesitation. Only balanced delimiters wrapping the complete styled run are
+    removed; ordinary unstyled text is left untouched.
+    """
+    if not value.marks and not value.presentations:
+        return value.text
+
+    text = value.text
+    for _ in range(2):
+        stripped = False
+        for marker in ("**", "__", "*", "_"):
+            if (
+                text.startswith(marker)
+                and text.endswith(marker)
+                and len(text) > 2 * len(marker)
+            ):
+                text = text[len(marker) : -len(marker)]
+                stripped = True
+                break
+        if not stripped:
+            break
+    return text
 
 
 def _collect_asset_ids(nodes: tuple[SemanticFlowNode, ...]) -> list[str]:

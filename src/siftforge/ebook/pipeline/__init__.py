@@ -45,6 +45,12 @@ from .pdf_to_epub import (
     EbookPdfToEpubRun,
     EbookPdfToEpubService,
 )
+from .proof import (
+    EbookProofError,
+    EbookProofRun,
+    EbookProofService,
+    EbookProofStatus,
+)
 
 __all__: list[str] = [
     "EbookBookExtractionError",
@@ -65,6 +71,10 @@ __all__: list[str] = [
     "EbookPDFPageExtractionService",
     "EbookPageEvidenceExtractionRun",
     "EbookPageExtractionRun",
+    "EbookProofError",
+    "EbookProofRun",
+    "EbookProofService",
+    "EbookProofStatus",
     "EbookPdfToEpubError",
     "EbookPdfToEpubRun",
     "EbookPdfToEpubService",

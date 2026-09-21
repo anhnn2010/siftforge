@@ -418,3 +418,41 @@ def test_build_epub_parser_accepts_metadata_without_title_flag() -> None:
     assert args.title is None
     assert args.metadata == Path("runs/book/metadata.json")
     assert args.cover == Path("covers/replacement.jpg")
+
+
+def test_prepare_proof_parser_exposes_protected_workspace_options() -> None:
+    """Proof preparation should require generated input and explicit output."""
+    parser = build_parser()
+    args = parser.parse_args(
+        [
+            "ebook",
+            "prepare-proof",
+            "--epub-ready",
+            "runs/book-build/epub-ready",
+            "--output",
+            "runs/book-build/proof",
+        ]
+    )
+
+    assert args.epub_ready == Path("runs/book-build/epub-ready")
+    assert args.output == Path("runs/book-build/proof")
+    assert args.force is False
+
+
+def test_package_epub_parser_accepts_human_proof_source() -> None:
+    """Final packaging should accept proof as an alternative to generated XHTML."""
+    parser = build_parser()
+    args = parser.parse_args(
+        [
+            "ebook",
+            "package-epub",
+            "--proof",
+            "runs/book-build/proof",
+            "--output",
+            "dist/book.epub",
+        ]
+    )
+
+    assert args.proof == Path("runs/book-build/proof")
+    assert args.epub_ready is None
+    assert args.output == Path("dist/book.epub")

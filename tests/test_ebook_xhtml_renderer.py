@@ -87,6 +87,142 @@ def test_renderer_preserves_source_italic_without_semantic_emphasis(
     assert "font-style: italic" in css
 
 
+def test_renderer_avoids_redundant_language_spans_for_document_language(
+    tmp_path: Path,
+) -> None:
+    """Same-language inline runs should inherit ``lang`` from the document root."""
+    document = SemanticBookDocument(
+        title="Book",
+        language="vi",
+        author=None,
+        nodes=(
+            SemanticParagraph(
+                node_id="p1",
+                content=(
+                    _inline("Trước "),
+                    _inline(
+                        "chữ nghiêng",
+                        presentations=(InlinePresentation.ITALIC,),
+                    ),
+                    _inline(" sau"),
+                ),
+            ),
+        ),
+    )
+
+    result = EpubReadyXhtmlRenderer().render(
+        document,
+        asset_root=tmp_path,
+        output_root=tmp_path / "out",
+    )
+    xhtml = result.content_path.read_text(encoding="utf-8")
+
+    assert (
+        '<p id="p1">Trước <span class="source-italic">chữ nghiêng</span> sau</p>'
+        in xhtml
+    )
+    assert '<span lang="vi" xml:lang="vi">' not in xhtml
+
+
+def test_renderer_keeps_language_span_only_for_actual_language_change(
+    tmp_path: Path,
+) -> None:
+    """A foreign-language inline should retain an explicit language override."""
+    document = SemanticBookDocument(
+        title="Book",
+        language="vi",
+        author=None,
+        nodes=(
+            SemanticParagraph(
+                node_id="p1",
+                content=(
+                    _inline("Tiếng Việt, "),
+                    SemanticInline(text="English", language="en"),
+                    _inline(" rồi lại tiếng Việt."),
+                ),
+            ),
+        ),
+    )
+
+    result = EpubReadyXhtmlRenderer().render(
+        document,
+        asset_root=tmp_path,
+        output_root=tmp_path / "out",
+    )
+    xhtml = result.content_path.read_text(encoding="utf-8")
+
+    assert '<span lang="en" xml:lang="en">English</span>' in xhtml
+    assert '<span lang="vi" xml:lang="vi">' not in xhtml
+
+
+def test_renderer_combines_italic_and_foreign_language_in_one_span(
+    tmp_path: Path,
+) -> None:
+    """Presentation and language overrides should not create nested spans."""
+    document = SemanticBookDocument(
+        title="Book",
+        language="vi",
+        author=None,
+        nodes=(
+            SemanticParagraph(
+                node_id="p1",
+                content=(
+                    SemanticInline(
+                        text="English title",
+                        language="en",
+                        presentations=(InlinePresentation.ITALIC,),
+                    ),
+                ),
+            ),
+        ),
+    )
+
+    result = EpubReadyXhtmlRenderer().render(
+        document,
+        asset_root=tmp_path,
+        output_root=tmp_path / "out",
+    )
+    xhtml = result.content_path.read_text(encoding="utf-8")
+
+    assert (
+        '<span class="source-italic" lang="en" xml:lang="en">English title</span>'
+        in xhtml
+    )
+    assert '<span lang="en" xml:lang="en"><span' not in xhtml
+
+
+def test_renderer_strips_redundant_markdown_markers_from_styled_inline(
+    tmp_path: Path,
+) -> None:
+    """Provider Markdown delimiters must not leak into final XHTML text."""
+    document = SemanticBookDocument(
+        title="Book",
+        language="vi",
+        author=None,
+        nodes=(
+            SemanticParagraph(
+                node_id="p1",
+                content=(
+                    _inline(
+                        "**Làm mẹ Thiên chức**",
+                        presentations=(InlinePresentation.ITALIC,),
+                    ),
+                ),
+            ),
+        ),
+    )
+
+    result = EpubReadyXhtmlRenderer().render(
+        document,
+        asset_root=tmp_path,
+        output_root=tmp_path / "out",
+    )
+    xhtml = result.content_path.read_text(encoding="utf-8")
+
+    assert '<span class="source-italic">Làm mẹ Thiên chức</span>' in xhtml
+    assert "**Làm mẹ Thiên chức**" not in xhtml
+
+
 def test_renderer_emits_explicit_emphasis(tmp_path: Path) -> None:
     """Explicit semantic marks should become corresponding XHTML markup."""
     document = SemanticBookDocument(
