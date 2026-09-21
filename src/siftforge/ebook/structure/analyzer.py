@@ -779,24 +779,27 @@ class BookStructuralAnalyzer:
         tuple[DocumentRelationship, ...],
         tuple[DocumentRelationship, ...],
     ]:
-        """Merge only unambiguous adjacent paragraph continuation chains.
+        """Merge only unambiguous adjacent continuation chains.
 
-        The continuation detector deliberately emits candidates for a broader
-        set of leaf roles. Automatic resolution is narrower: both logical
-        nodes must be top-level paragraphs, they must be adjacent in logical
-        flow, and the candidate must contain every strong boundary signal used
-        by the current scorer (confidence ``0.99``).
+        Plain paragraph chains are resolved as before. A second safe shape is
+        also supported: the final item of a list may continue as an unmarked
+        paragraph at the top of the next physical page. In that case the
+        paragraph text is folded into that list item rather than flattening the
+        surrounding list structure.
 
-        Consumed relationships are returned separately so diagnostics retain
-        the evidence that justified the merge without leaving dangling
+        Candidates normally contain every strong boundary signal used by the
+        scorer (confidence ``0.99``). Paragraph-to-paragraph continuations may
+        also resolve at ``0.95`` when the only missing signal is typography:
+        page-level extraction can flatten a mixed-style paragraph to one posture
+        even though the visible sentence continues across the physical page.
+        Consumed relationships are returned separately so diagnostics retain the
+        evidence that justified the merge without leaving dangling
         ``CONTINUES_TO`` links in ``BookDocument``.
         """
-        resolvable = {
+        continuation_relationships = {
             (relationship.source_id, relationship.target_id): relationship
             for relationship in relationships
             if relationship.kind is RelationshipKind.CONTINUES_TO
-            and relationship.confidence is not None
-            and relationship.confidence >= 0.99
         }
         resolved: list[DocumentRelationship] = []
         merged_nodes: list[FlowNode] = []
@@ -804,29 +807,85 @@ class BookStructuralAnalyzer:
 
         while index < len(nodes):
             current = nodes[index]
-            if not isinstance(current, ParagraphNode):
-                merged_nodes.append(current)
-                index += 1
+
+            if isinstance(current, ParagraphNode):
+                merged = current
+                source_id = current.node_id
+                chain_index = index
+                deferred_footnotes: list[FootnoteNode] = []
+                while chain_index + 1 < len(nodes):
+                    probe_index = chain_index + 1
+                    boundary_footnotes: list[FootnoteNode] = []
+                    while probe_index < len(nodes) and isinstance(
+                        nodes[probe_index], FootnoteNode
+                    ):
+                        boundary_footnotes.append(nodes[probe_index])
+                        probe_index += 1
+                    if probe_index >= len(nodes):
+                        break
+                    right = nodes[probe_index]
+                    if not isinstance(right, ParagraphNode):
+                        break
+                    relationship = continuation_relationships.get(
+                        (source_id, right.node_id)
+                    )
+                    if (
+                        relationship is None
+                        or not _paragraph_continuation_is_resolvable(relationship)
+                    ):
+                        break
+                    merged = _merge_paragraph_nodes(merged, right)
+                    resolved.append(relationship)
+                    deferred_footnotes.extend(boundary_footnotes)
+                    source_id = right.node_id
+                    chain_index = probe_index
+
+                merged_nodes.append(merged)
+                merged_nodes.extend(deferred_footnotes)
+                index = chain_index + 1
                 continue
 
-            merged = current
-            chain_index = index
-            while chain_index + 1 < len(nodes):
-                left = nodes[chain_index]
-                right = nodes[chain_index + 1]
-                if not isinstance(left, ParagraphNode) or not isinstance(
-                    right, ParagraphNode
-                ):
-                    break
-                relationship = resolvable.get((left.node_id, right.node_id))
-                if relationship is None:
-                    break
-                merged = _merge_paragraph_nodes(merged, right)
-                resolved.append(relationship)
-                chain_index += 1
+            if isinstance(current, ListNode) and current.items:
+                last_item = current.items[-1]
+                merged_item = last_item
+                source_id = last_item.node_id
+                chain_index = index
+                while chain_index + 1 < len(nodes):
+                    right = nodes[chain_index + 1]
+                    if not isinstance(right, ParagraphNode):
+                        break
+                    relationship = continuation_relationships.get(
+                        (source_id, right.node_id)
+                    )
+                    if (
+                        relationship is None
+                        or relationship.confidence is None
+                        or relationship.confidence < 0.99
+                    ):
+                        break
+                    merged_item = _merge_list_item_with_paragraph(
+                        merged_item, right
+                    )
+                    resolved.append(relationship)
+                    source_id = right.node_id
+                    chain_index += 1
 
-            merged_nodes.append(merged)
-            index = chain_index + 1
+                if chain_index != index:
+                    merged_nodes.append(
+                        replace(
+                            current,
+                            items=current.items[:-1] + (merged_item,),
+                            provenance=(
+                                current.provenance
+                                + merged_item.provenance[len(last_item.provenance) :]
+                            ),
+                        )
+                    )
+                    index = chain_index + 1
+                    continue
+
+            merged_nodes.append(current)
+            index += 1
 
         resolved_ids = {item.relationship_id for item in resolved}
         unresolved = tuple(
@@ -859,8 +918,10 @@ class BookStructuralAnalyzer:
             right_blocks = body_by_page[page_index + 1]
             if not left_blocks or not right_blocks:
                 continue
-            left = left_blocks[-1]
-            right = right_blocks[0]
+            left = _left_continuation_boundary(left_blocks)
+            right = _right_continuation_boundary(right_blocks)
+            if left is None or right is None:
+                continue
             source_id = node_ids_by_block.get(left.block_id)
             target_id = node_ids_by_block.get(right.block_id)
             if source_id is None or target_id is None:
@@ -876,6 +937,36 @@ class BookStructuralAnalyzer:
             if candidate is not None:
                 candidates.append(candidate)
         return tuple(candidates)
+
+
+def _left_continuation_boundary(
+    blocks: Sequence[PageBlockEvidence],
+) -> PageBlockEvidence | None:
+    """Return the body block that reaches the physical page boundary.
+
+    Bottom-of-page footnotes are side content: they may follow the final body
+    paragraph visually without ending that paragraph's logical flow. They are
+    therefore skipped while looking backward. Any other non-continuation role
+    remains a hard boundary so headings, captions, and other structures are not
+    jumped over speculatively.
+    """
+    for block in reversed(blocks):
+        if block.role_hint in _CONTINUATION_ROLES:
+            return block
+        if block.role_hint is BlockRoleHint.FOOTNOTE:
+            continue
+        return None
+    return None
+
+
+def _right_continuation_boundary(
+    blocks: Sequence[PageBlockEvidence],
+) -> PageBlockEvidence | None:
+    """Return continuation-capable body evidence at the next page top."""
+    first = blocks[0] if blocks else None
+    if first is None or first.role_hint not in _CONTINUATION_ROLES:
+        return None
+    return first
 
 
 def _positions_are_same_or_consecutive(
@@ -1157,6 +1248,29 @@ def _verse_line_id(block_id: str, line_number: int) -> str:
     return f"{block_id}:node:verse-line:{line_number:04d}"
 
 
+def _merge_list_item_with_paragraph(
+    left: ListItemNode,
+    right: ParagraphNode,
+) -> ListItemNode:
+    """Extend one list item with prose continued on the next page."""
+    spans = list(left.spans)
+    if _text_nodes_need_joining_space(left.spans, right.spans):
+        spans.append(
+            _continuation_join_span_from_parts(
+                left.node_id,
+                left.spans,
+                right.node_id,
+                right.spans,
+            )
+        )
+    spans.extend(right.spans)
+    return replace(
+        left,
+        spans=tuple(spans),
+        provenance=left.provenance + right.provenance,
+    )
+
+
 def _merge_paragraph_nodes(
     left: ParagraphNode,
     right: ParagraphNode,
@@ -1183,8 +1297,16 @@ def _paragraphs_need_joining_space(
     right: ParagraphNode,
 ) -> bool:
     """Return whether one synthetic space is needed at a merged page break."""
-    left_text = "".join(span.text for span in left.spans)
-    right_text = "".join(span.text for span in right.spans)
+    return _text_nodes_need_joining_space(left.spans, right.spans)
+
+
+def _text_nodes_need_joining_space(
+    left_spans: Sequence[DocumentTextSpan],
+    right_spans: Sequence[DocumentTextSpan],
+) -> bool:
+    """Return whether adjacent continuation spans need synthetic whitespace."""
+    left_text = "".join(span.text for span in left_spans)
+    right_text = "".join(span.text for span in right_spans)
     if not left_text or not right_text:
         return False
     if left_text[-1].isspace() or right_text[0].isspace():
@@ -1200,13 +1322,28 @@ def _continuation_join_span(
     left: ParagraphNode,
     right: ParagraphNode,
 ) -> DocumentTextSpan:
-    """Create synthetic whitespace introduced by logical paragraph stitching."""
-    if not left.spans or not right.spans:
-        raise ValueError("continuation join requires non-empty paragraph spans")
-    left_span = left.spans[-1]
-    right_span = right.spans[0]
+    """Create synthetic whitespace introduced by paragraph stitching."""
+    return _continuation_join_span_from_parts(
+        left.node_id,
+        left.spans,
+        right.node_id,
+        right.spans,
+    )
+
+
+def _continuation_join_span_from_parts(
+    left_node_id: str,
+    left_spans: Sequence[DocumentTextSpan],
+    right_node_id: str,
+    right_spans: Sequence[DocumentTextSpan],
+) -> DocumentTextSpan:
+    """Create synthetic whitespace for any supported continuation merge."""
+    if not left_spans or not right_spans:
+        raise ValueError("continuation join requires non-empty text spans")
+    left_span = left_spans[-1]
+    right_span = right_spans[0]
     return DocumentTextSpan(
-        span_id=f"{left.node_id}:join:{right.node_id}",
+        span_id=f"{left_node_id}:join:{right_node_id}",
         text=" ",
         language=(
             left_span.language
@@ -1217,6 +1354,30 @@ def _continuation_join_span(
         semantic_marks=(),
         provenance=(),
     )
+
+
+def _paragraph_continuation_is_resolvable(
+    relationship: DocumentRelationship,
+) -> bool:
+    """Return whether a paragraph continuation is safe to auto-resolve.
+
+    Full evidence scores ``0.99``. A ``0.95`` candidate is also safe when the
+    lexical boundary and language signals are all present and only typography
+    compatibility is absent. This covers mixed-style paragraphs whose page-level
+    extraction collapsed the left page to one source posture.
+    """
+    if relationship.confidence is None:
+        return False
+    if relationship.confidence >= 0.99:
+        return True
+    if relationship.confidence < 0.95:
+        return False
+    required_reasons = {
+        "previous page ends without terminal punctuation",
+        "next page starts with a lowercase letter",
+        "adjacent blocks use the same language",
+    }
+    return required_reasons.issubset(relationship.reasons)
 
 
 def _continuation_relationship(

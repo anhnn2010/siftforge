@@ -55,6 +55,7 @@ def _block(
     *,
     language: str | None = "vi",
     marker: MarkerEvidence | None = None,
+    posture: FontPosture = FontPosture.ROMAN,
     semantic_line_break_after: bool = False,
     heading_role_hint: HeadingRoleHint = HeadingRoleHint.UNKNOWN,
     region: NormalizedRegion | None = None,
@@ -65,7 +66,7 @@ def _block(
         span_id=f"{block_id}:span:0001",
         text=text,
         language=language,
-        source_typography=_typography(),
+        source_typography=_typography(posture),
         semantic_line_break_after=semantic_line_break_after,
     )
     return PageBlockEvidence(
@@ -400,6 +401,131 @@ def test_page_furniture_does_not_block_real_page_15_16_continuation() -> None:
     assert result.continuation_candidates == ()
 
 
+def test_typography_mismatch_does_not_block_strong_paragraph_continuation() -> None:
+    """Mixed-style extraction should not veto an otherwise certain sentence join."""
+    first = _page(
+        142,
+        _block(
+            "page-0142",
+            7,
+            BlockRoleHint.PARAGRAPH,
+            (
+                "Trẻ sau sinh đến 4 tuổi là thời kỳ phát triển mạnh để hoàn "
+                "chỉnh não bộ và hệ thần kinh trung ương, nên việc tiến hành "
+                "và duy trì thực dưỡng, sức khỏe lành mạnh, giao tiếp giao cảm, "
+                "trực quan sinh động với thế giới xung quanh của trẻ cần được "
+                "tiến hành bền bỉ, kiên trì, liên tục, như là cách để trẻ hưởng "
+                "thụ cuộc sống và chính bạn hưởng thụ giá trị làm cha mẹ, nhưng "
+                "chính trong quá trình dấn thân toàn bộ trong việc chăm sóc, "
+                "yêu thương con cái một"
+            ),
+            posture=FontPosture.ROMAN,
+        ),
+        _block(
+            "page-0142",
+            8,
+            BlockRoleHint.PAGE_NUMBER,
+            "142",
+            language=None,
+        ),
+        _block(
+            "page-0142",
+            9,
+            BlockRoleHint.PAGE_FOOTER,
+            "18 NĂM KIM CƯƠNG",
+        ),
+    )
+    second = _page(
+        143,
+        _block(
+            "page-0143",
+            1,
+            BlockRoleHint.PARAGRAPH,
+            (
+                "cách hiểu biết, bạn đang giúp não bộ đứa trẻ trở nên có phẩm "
+                "chất hoàn hảo nhất so với việc cũng chính đứa trẻ ấy nhưng "
+                "nhận được sự chăm sóc kém hơn từ cha mẹ."
+            ),
+            posture=FontPosture.ITALIC,
+        ),
+    )
+
+    result = BookStructuralAnalyzer().analyze((first, second))
+
+    assert len(result.document.nodes) == 1
+    paragraph = result.document.nodes[0]
+    assert isinstance(paragraph, ParagraphNode)
+    assert "yêu thương con cái một cách hiểu biết" in "".join(
+        span.text for span in paragraph.spans
+    )
+    assert [fragment.page_id for fragment in paragraph.provenance] == [
+        "page-0142",
+        "page-0143",
+    ]
+    assert len(result.resolved_continuations) == 1
+    candidate = result.resolved_continuations[0]
+    assert candidate.confidence == 0.95
+    assert "boundary typography is compatible" not in candidate.reasons
+    assert result.continuation_candidates == ()
+
+
+def test_trailing_footnote_does_not_block_body_continuation() -> None:
+    """A bottom footnote must not hide the final continuing body paragraph."""
+    first = _page(
+        118,
+        _block(
+            "page-0118",
+            6,
+            BlockRoleHint.PARAGRAPH,
+            (
+                "Do đó, tôi không cho phép bản thân trì hoãn hay mắc sai lầm "
+                "nhiều lần. Bởi, trong khi nếu tôi xem nhẹ chất lượng chăm"
+            ),
+        ),
+        _block(
+            "page-0118",
+            7,
+            BlockRoleHint.FOOTNOTE,
+            (
+                "1 Hiện tượng mà hiện nay tại Việt Nam thường đánh đồng với "
+                "hội chứng tự kỷ hiếm gặp."
+            ),
+        ),
+        _block(
+            "page-0118",
+            8,
+            BlockRoleHint.PAGE_NUMBER,
+            "118",
+            language=None,
+        ),
+    )
+    second = _page(
+        119,
+        _block(
+            "page-0119",
+            1,
+            BlockRoleHint.PARAGRAPH,
+            (
+                "sóc đúng cách và hợp với tự nhiên, thì thời gian vẫn trôi "
+                "và đứa trẻ vẫn phải đáp ứng để lớn."
+            ),
+        ),
+    )
+
+    result = BookStructuralAnalyzer().analyze((first, second))
+
+    paragraphs = [
+        node for node in result.document.nodes if isinstance(node, ParagraphNode)
+    ]
+    assert len(paragraphs) == 1
+    assert "chất lượng chăm sóc đúng cách" in "".join(
+        span.text for span in paragraphs[0].spans
+    )
+    assert any(isinstance(node, FootnoteNode) for node in result.document.nodes)
+    assert len(result.resolved_continuations) == 1
+    assert result.continuation_candidates == ()
+
+
 def test_ambiguous_cross_page_paragraph_remains_candidate() -> None:
     """A weaker paragraph boundary should remain unresolved for later review."""
     first = _page(
@@ -455,8 +581,8 @@ def test_terminal_sentence_does_not_create_continuation_candidate() -> None:
     assert result.continuation_candidates == ()
 
 
-def test_list_item_to_paragraph_can_be_a_continuation_candidate() -> None:
-    """A list item may continue as an unmarked paragraph on the next page."""
+def test_ambiguous_list_item_to_paragraph_remains_candidate() -> None:
+    """A weaker list-item boundary stays visible for later review."""
     first = _page(
         105,
         _block(
@@ -473,7 +599,7 @@ def test_list_item_to_paragraph_can_be_a_continuation_candidate() -> None:
             "page-0106",
             1,
             BlockRoleHint.PARAGRAPH,
-            "niêm mạc và hỗ trợ trẻ hồi phục.",
+            "Niêm mạc có thể cần được đánh giá riêng.",
         ),
     )
 
@@ -481,8 +607,63 @@ def test_list_item_to_paragraph_can_be_a_continuation_candidate() -> None:
 
     assert len(result.continuation_candidates) == 1
     candidate = result.continuation_candidates[0]
+    assert candidate.confidence == 0.80
     assert ":node:list-item" in candidate.source_id
     assert ":node:paragraph" in candidate.target_id
+    assert result.resolved_continuations == ()
+
+
+def test_high_confidence_list_item_continues_as_next_page_paragraph() -> None:
+    """An unmarked next-page paragraph may finish the final list item."""
+    first = _page(
+        127,
+        _block(
+            "page-0127",
+            6,
+            BlockRoleHint.LIST_ITEM,
+            "Một mục hoàn chỉnh trước đó.",
+            marker=MarkerEvidence(kind=MarkerKind.GRAPHIC),
+        ),
+        _block(
+            "page-0127",
+            7,
+            BlockRoleHint.LIST_ITEM,
+            (
+                "Các loại nước ép từ rau xanh được tôi chọn chế biến để "
+                "trẻ"
+            ),
+            marker=MarkerEvidence(kind=MarkerKind.GRAPHIC),
+        ),
+    )
+    second = _page(
+        128,
+        _block(
+            "page-0128",
+            1,
+            BlockRoleHint.PARAGRAPH,
+            (
+                "uống những lúc cơ thể sốt dịch, sốt theo mùa, sốt tập "
+                "dượt miễn dịch thông thường."
+            ),
+        ),
+    )
+
+    result = BookStructuralAnalyzer().analyze((first, second))
+
+    assert len(result.document.nodes) == 1
+    list_node = result.document.nodes[0]
+    assert isinstance(list_node, ListNode)
+    assert len(list_node.items) == 2
+    final_item = list_node.items[-1]
+    assert "để trẻ uống những lúc cơ thể sốt dịch" in "".join(
+        span.text for span in final_item.spans
+    )
+    assert [fragment.page_id for fragment in final_item.provenance] == [
+        "page-0127",
+        "page-0128",
+    ]
+    assert len(result.resolved_continuations) == 1
+    assert result.continuation_candidates == ()
 
 
 def test_verse_semantic_breaks_become_logical_lines() -> None:

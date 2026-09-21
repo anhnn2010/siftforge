@@ -348,10 +348,10 @@ page 397: dash-prefixed dialogue -> paragraphs, not a list
 page 412: graphic-marked dialogue -> paragraphs with visual marker evidence
 ```
 
-Likewise, continuation candidates are not automatically merged. A strong case
-such as a paragraph ending mid-sentence may produce a relationship with
-confidence/reasons while the two logical nodes remain independent until a
-later resolver accepts the candidate.
+Continuation detection and resolution remain separate. Lower-confidence
+candidates stay as relationships for later review, while only the strongest
+well-defined boundary shapes are consumed automatically by the structural
+resolver.
 
 The first pass also preserves already-explicit local structure where doing so is
 lossless: headings become provisional `HeadingNode` values, quote evidence is
@@ -468,28 +468,39 @@ unchanged for a later semantic resolver.
 
 ### High-confidence cross-page prose continuation resolution
 
-The structural analyzer now consumes only the strongest paragraph-to-paragraph
-`CONTINUES_TO` candidates. Automatic resolution requires adjacent top-level
-paragraphs and the current maximum confidence (`0.99`), which means the page
-boundary has all strong signals used by the scorer: no terminal punctuation on
-the previous page, a lowercase continuation on the next page, matching known
-language, and compatible boundary typography. Lower-confidence prose, lists,
-and quotations remain unresolved candidates.
+The structural analyzer consumes only the strongest `CONTINUES_TO` candidates.
+Ordinary paragraph-to-paragraph boundaries resolve at the current maximum
+confidence (`0.99`). They may also resolve at `0.95` when the lexical boundary
+and language signals are all strong and the only missing signal is matching
+source typography. This covers mixed-style paragraphs whose page-level
+extraction flattened one side of the physical page break to a single posture.
+A final list item may also continue as an unmarked paragraph at the top of the
+next page; that stricter shape still requires `0.99` confidence and folds the
+text into the existing `ListItemNode`, preserving the surrounding list rather
+than flattening it. Lower-confidence prose, list, and quotation boundaries
+remain unresolved candidates.
 
-Running page furniture is removed before continuation detection, so a footer or
-page number after the final body paragraph does not hide the real page boundary.
-Resolved paragraphs keep both source fragments in provenance. If normal
-inter-word whitespace disappeared at the physical page break, the logical merge
-inserts a synthetic unprovenanced space while leaving all source spans intact.
-The consumed relationship is retained in
-`StructuralAnalysisResult.resolved_continuations` for diagnostics and omitted
-from `BookDocument.relationships`, avoiding a dangling unresolved link later in
-semantic projection.
+Running page furniture is removed before continuation detection. Bottom-of-page
+footnotes are also treated as side content when locating the body boundary, so a
+footnote after a still-open paragraph does not hide that paragraph from the next
+page continuation. Headings, captions, and other structural blocks remain hard
+boundaries and are never jumped over speculatively.
+
+Resolved text keeps all source fragments in provenance. If normal inter-word
+whitespace disappeared at the physical page break, the logical merge inserts a
+synthetic unprovenanced space while leaving all source spans intact. The consumed
+relationship is retained in `StructuralAnalysisResult.resolved_continuations`
+for diagnostics and omitted from `BookDocument.relationships`, avoiding a
+dangling unresolved link later in semantic projection.
 
 The regression case from physical pages 15-16 of *18 Năm Kim Cương* now joins
 `"...mẹ luôn cảm nhận và thấu"` with
 `"hiểu con trong xúc động sâu sắc..."` into one logical paragraph containing
-`"...mẹ luôn cảm nhận và thấu hiểu con..."`.
+`"...mẹ luôn cảm nhận và thấu hiểu con..."`. Additional real-book regressions
+cover a trailing footnote on pages 118-119, a list item continuing as an
+unmarked paragraph on pages 127-128, and a mixed-style paragraph on pages
+142-143 where the extracted posture differs across the boundary even though the
+visible sentence continues.
 
 ## Milestone 1F-8 - Real-run golden regression fixture harness
 
