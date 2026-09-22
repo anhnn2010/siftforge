@@ -377,6 +377,23 @@ def test_review_text_parser_accepts_local_ocr_options() -> None:
     assert args.ocr_language == "vie+eng"
     assert args.ocr_psm == 3
     assert args.force is True
+    assert args.quiet is False
+
+
+def test_review_text_parser_accepts_quiet_progress_mode() -> None:
+    """Long review runs should allow explicit progress suppression."""
+    parser = build_parser()
+    args = parser.parse_args(
+        [
+            "ebook",
+            "review-text",
+            "--runs-root",
+            "runs/book",
+            "--quiet",
+        ]
+    )
+
+    assert args.quiet is True
 
 
 def test_import_review_parser_accepts_exported_resolutions() -> None:

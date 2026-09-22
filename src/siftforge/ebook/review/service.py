@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
 from dataclasses import asdict, replace
 from pathlib import Path
 from typing import Protocol
@@ -24,6 +25,8 @@ from .models import (
     OcrPage,
     PageReviewResult,
     ReviewFinding,
+    ReviewProgress,
+    ReviewProgressState,
     TextReviewRun,
 )
 from .projection import project_page_text
@@ -64,6 +67,7 @@ class EbookTextReviewService:
         start_page: int = 1,
         end_page: int | None = None,
         force: bool = False,
+        progress_callback: Callable[[ReviewProgress], None] | None = None,
     ) -> TextReviewRun:
         """Review canonical page runs without modifying normalized extraction."""
         root = Path(runs_root).expanduser().resolve()
@@ -86,7 +90,8 @@ class EbookTextReviewService:
         processed_pages = 0
         reused_pages = 0
         ocr_cache_key = self._ocr_cache_key()
-        for page_run in page_runs:
+        total_pages = len(page_runs)
+        for index, page_run in enumerate(page_runs, start=1):
             projection = project_page_text(page_run.page)
             fingerprint = build_review_input_fingerprint(
                 page_run=page_run,
@@ -105,8 +110,33 @@ class EbookTextReviewService:
             if cached is not None:
                 pages.append(cached)
                 reused_pages += 1
+                self._emit_progress(
+                    progress_callback,
+                    ReviewProgress(
+                        index=index,
+                        total=total_pages,
+                        page_number=page_run.page_number,
+                        state=ReviewProgressState.REUSED,
+                        processed_pages=processed_pages,
+                        reused_pages=reused_pages,
+                        finding_count=len(cached.findings),
+                        suppressed_count=len(cached.suppressed_findings),
+                        ocr_similarity=cached.ocr_similarity,
+                    ),
+                )
                 continue
 
+            self._emit_progress(
+                progress_callback,
+                ReviewProgress(
+                    index=index,
+                    total=total_pages,
+                    page_number=page_run.page_number,
+                    state=ReviewProgressState.OCR_STARTED,
+                    processed_pages=processed_pages,
+                    reused_pages=reused_pages,
+                ),
+            )
             try:
                 ocr = self._ocr.extract(page_run.source_image)
             except Exception as exc:
@@ -152,6 +182,20 @@ class EbookTextReviewService:
                 input_fingerprint=fingerprint,
                 ocr_cache_key=ocr_cache_key,
             )
+            self._emit_progress(
+                progress_callback,
+                ReviewProgress(
+                    index=index,
+                    total=total_pages,
+                    page_number=page_run.page_number,
+                    state=ReviewProgressState.PROCESSED,
+                    processed_pages=processed_pages,
+                    reused_pages=reused_pages,
+                    finding_count=len(result.findings),
+                    suppressed_count=len(result.suppressed_findings),
+                    ocr_similarity=result.ocr_similarity,
+                ),
+            )
 
         page_tuple = tuple(pages)
         summary_path, report_path = write_review_artifacts(
@@ -190,6 +234,15 @@ class EbookTextReviewService:
             processed_pages=processed_pages,
             reused_pages=reused_pages,
         )
+
+    @staticmethod
+    def _emit_progress(
+        callback: Callable[[ReviewProgress], None] | None,
+        progress: ReviewProgress,
+    ) -> None:
+        """Emit one optional live-progress update without owning presentation."""
+        if callback is not None:
+            callback(progress)
 
     def _ocr_cache_key(self) -> str:
         """Return a stable OCR configuration key without requiring OCR work."""

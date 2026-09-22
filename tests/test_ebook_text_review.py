@@ -29,6 +29,7 @@ from siftforge.ebook.review import (
     ReviewFilterConfig,
     ReviewFinding,
     ReviewKind,
+    ReviewProgressState,
     ReviewSeverity,
     ReviewSource,
 )
@@ -273,6 +274,45 @@ def test_service_keeps_normalized_text_and_writes_review_overlay(
     assert finding_payload["findings"][0]["gemini_text"] == "ngày14"
     crop = result.output_dir / result.pages[0].findings[0].crop_path
     assert crop.is_file()
+
+
+def test_service_emits_live_progress_for_processed_page(tmp_path: Path) -> None:
+    """Review service should expose OCR-start and completion progress events."""
+    run_dir = tmp_path / "page-0013"
+    normalized = run_dir / "normalized"
+    normalized.mkdir(parents=True)
+    (normalized / "page.json").write_text("{}\n", encoding="utf-8")
+    source_image = run_dir / "assets" / "page-0013.jpg"
+    source_image.parent.mkdir(parents=True)
+    Image.new("RGB", (200, 120), "white").save(source_image)
+    page_run = EbookPageRunArtifact(
+        run_dir=run_dir,
+        page_number=13,
+        page=_page("3 giờ sáng ngày14 tháng 12"),
+        source_image=source_image,
+        source_media_type="image/jpeg",
+    )
+    service = EbookTextReviewService(
+        _FakeOcr(),
+        loader=_FakeLoader(page_run),  # type: ignore[arg-type]
+    )
+    progress = []
+
+    service.review(
+        tmp_path,
+        tmp_path / "review",
+        progress_callback=progress.append,
+    )
+
+    assert [item.state for item in progress] == [
+        ReviewProgressState.OCR_STARTED,
+        ReviewProgressState.PROCESSED,
+    ]
+    assert progress[0].index == 1
+    assert progress[0].total == 1
+    assert progress[0].page_number == 13
+    assert progress[-1].processed_pages == 1
+    assert progress[-1].finding_count == 1
 
 
 def test_comparison_coalesces_nearby_character_noise() -> None:

@@ -6,6 +6,7 @@ import argparse
 import json
 import os
 import sys
+import time
 from collections.abc import Sequence
 from pathlib import Path
 
@@ -44,6 +45,8 @@ from siftforge.ebook.review import (
     EbookTextReviewService,
     LocalOcrError,
     ReviewFilterConfig,
+    ReviewProgress,
+    ReviewProgressState,
     ReviewResolutionError,
     ReviewStatusError,
     ReviewStatusService,
@@ -417,6 +420,11 @@ def build_parser() -> argparse.ArgumentParser:
             "Re-run local OCR even when a current compatible page review "
             "already exists."
         ),
+    )
+    review_text.add_argument(
+        "--quiet",
+        action="store_true",
+        help="Suppress live per-page review progress.",
     )
 
     import_review = ebook_actions.add_parser(
@@ -1299,6 +1307,74 @@ def _run_ebook_convert_pdf(args: argparse.Namespace) -> int:
     return 0 if result.passed else 1
 
 
+class _TextReviewProgressPrinter:
+    """Render compact live progress for long local-OCR review runs."""
+
+    def __init__(self) -> None:
+        self._started_at = time.monotonic()
+        self._last_width = 0
+        self._is_tty = sys.stderr.isatty()
+        self._announced = False
+
+    def __call__(self, progress: ReviewProgress) -> None:
+        """Print one progress update to stderr."""
+        if not self._announced:
+            print(
+                f"review: {progress.total} page(s) selected",
+                file=sys.stderr,
+            )
+            self._announced = True
+
+        if progress.state is ReviewProgressState.OCR_STARTED:
+            status = "OCR..."
+            findings = ""
+        else:
+            status = progress.state.value
+            findings = f"  findings={progress.finding_count}"
+
+        completed = progress.processed_pages + progress.reused_pages
+        elapsed = max(time.monotonic() - self._started_at, 1e-9)
+        rate = completed / elapsed if completed else 0.0
+        remaining = max(progress.total - completed, 0)
+        eta = _format_review_eta(remaining / rate) if rate > 0 else "--:--"
+        similarity = (
+            f"  similarity={progress.ocr_similarity * 100:.1f}%"
+            if progress.ocr_similarity is not None
+            else ""
+        )
+        line = (
+            f"Review [{progress.index:>{len(str(progress.total))}}/{progress.total}] "
+            f"page-{progress.page_number:04d}  {status}"
+            f"{findings}{similarity}  "
+            f"processed={progress.processed_pages}  reused={progress.reused_pages}  "
+            f"{rate:.2f} pages/s  ETA {eta}"
+        )
+        if self._is_tty:
+            padding = " " * max(self._last_width - len(line), 0)
+            print(f"\r{line}{padding}", end="", file=sys.stderr, flush=True)
+            self._last_width = len(line)
+            if completed == progress.total:
+                print(file=sys.stderr)
+        elif progress.state is not ReviewProgressState.OCR_STARTED:
+            print(line, file=sys.stderr, flush=True)
+
+    def finish(self) -> None:
+        """Terminate an in-place TTY progress line after an early failure."""
+        if self._is_tty and self._last_width:
+            print(file=sys.stderr)
+            self._last_width = 0
+
+
+def _format_review_eta(seconds: float) -> str:
+    """Format an ETA duration compactly for terminal progress."""
+    total_seconds = max(int(round(seconds)), 0)
+    hours, remainder = divmod(total_seconds, 3600)
+    minutes, secs = divmod(remainder, 60)
+    if hours:
+        return f"{hours:d}:{minutes:02d}:{secs:02d}"
+    return f"{minutes:02d}:{secs:02d}"
+
+
 def _run_ebook_review_text(args: argparse.Namespace) -> int:
     """Run provider-free text fidelity review across canonical page runs."""
     if args.start_page < 1:
@@ -1344,6 +1420,7 @@ def _run_ebook_review_text(args: argparse.Namespace) -> int:
             ),
         ),
     )
+    progress_printer = None if args.quiet else _TextReviewProgressPrinter()
     try:
         run = service.review(
             args.runs_root,
@@ -1351,8 +1428,11 @@ def _run_ebook_review_text(args: argparse.Namespace) -> int:
             start_page=args.start_page,
             end_page=args.end_page,
             force=args.force,
+            progress_callback=progress_printer,
         )
     except (TextReviewError, LocalOcrError, OSError, ValueError) as exc:
+        if progress_printer is not None:
+            progress_printer.finish()
         print(f"error: {exc}", file=sys.stderr)
         return 2
 

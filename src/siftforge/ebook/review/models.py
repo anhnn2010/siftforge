@@ -116,6 +116,29 @@ class PageReviewResult:
     suppressed_findings: tuple[ReviewFinding, ...] = ()
 
 
+class ReviewProgressState(StrEnum):
+    """Lifecycle state for one page in a whole-book review run."""
+
+    OCR_STARTED = "ocr_started"
+    PROCESSED = "processed"
+    REUSED = "reused"
+
+
+@dataclass(frozen=True, slots=True)
+class ReviewProgress:
+    """One live progress update emitted while reviewing page runs."""
+
+    index: int
+    total: int
+    page_number: int
+    state: ReviewProgressState
+    processed_pages: int
+    reused_pages: int
+    finding_count: int = 0
+    suppressed_count: int = 0
+    ocr_similarity: float | None = None
+
+
 @dataclass(frozen=True, slots=True)
 class TextReviewRun:
     """Whole-run review result and persisted report locations."""

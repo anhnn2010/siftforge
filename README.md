@@ -1428,6 +1428,10 @@ is required, but Tesseract and the requested language data must be installed on
 the machine. A page range can be inspected first with `--start-page` and
 `--end-page`.
 
+Long review runs print live per-page progress to stderr, including the current
+page, whether OCR was processed or reused from cache, finding count, similarity,
+throughput, and ETA. Use `--quiet` when progress output is not wanted.
+
 The structured Gemini text is flattened only into a temporary comparison
 projection. Character provenance still maps findings back to normalized
 `block_id` and `span_id`; `normalized/page.json` is never rewritten by review.
