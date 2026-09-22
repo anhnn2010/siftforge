@@ -23,7 +23,39 @@ class MissingMaterializedAssetError(GeminiProviderError):
 
 
 class InvalidGeminiResponseError(GeminiProviderError):
-    """Raised when Gemini does not return valid JSON for a structured task."""
+    """Raised when Gemini does not return valid JSON for a structured task.
+
+    Provider-safe generation diagnostics are retained so routing and recovery
+    layers can distinguish generic malformed output from terminal generation
+    reasons such as ``RECITATION`` without parsing exception strings.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        diagnostics: dict[str, object] | None = None,
+    ) -> None:
+        """Store provider-safe generation diagnostics alongside the message."""
+        super().__init__(message)
+        self.diagnostics: dict[str, object] = dict(diagnostics or {})
+
+    @property
+    def finish_reasons(self) -> tuple[str, ...]:
+        """Return normalized Gemini finish reasons attached to this failure."""
+        value = self.diagnostics.get("finish_reasons")
+        if isinstance(value, tuple):
+            return tuple(str(item) for item in value)
+        if isinstance(value, list):
+            return tuple(str(item) for item in value)
+        if value is None:
+            return ()
+        return (str(value),)
+
+    @property
+    def is_recitation(self) -> bool:
+        """Return whether Gemini stopped generation for recitation filtering."""
+        return any(reason.upper() == "RECITATION" for reason in self.finish_reasons)
 
 
 class GeminiRequestError(GeminiProviderError):
@@ -64,10 +96,16 @@ class GeminiProviderConfig:
 
 @dataclass(frozen=True, slots=True)
 class GeminiTransportResponse:
-    """Provider-agnostic subset of a Gemini SDK response used by SiftForge."""
+    """Provider-agnostic subset of a Gemini SDK response used by SiftForge.
+
+    ``diagnostics`` contains only provider-safe generation metadata used to explain
+    empty structured responses. It must never contain credentials, prompts, or raw
+    user content.
+    """
 
     text: str
     usage: dict[str, int | float | str | None] = field(default_factory=dict)
+    diagnostics: dict[str, object] = field(default_factory=dict)
 
 
 class GeminiTransport(Protocol):
@@ -140,7 +178,14 @@ class GeminiProvider:
         )
 
         if not response.text.strip():
-            raise InvalidGeminiResponseError("Gemini returned an empty response")
+            detail = _format_empty_response_diagnostics(response.diagnostics)
+            message = "Gemini returned an empty response"
+            if detail:
+                message = f"{message} ({detail})"
+            raise InvalidGeminiResponseError(
+                message,
+                diagnostics=response.diagnostics,
+            )
 
         try:
             normalized_data: Any = json.loads(response.text)
@@ -229,9 +274,178 @@ class _GoogleGenAITransport:
         except Exception as exc:
             raise _normalize_request_error(exc) from exc
 
-        text: str = response.text or ""
+        text: str = _extract_response_text(response)
         usage: dict[str, int | float | str | None] = _extract_usage(response)
-        return GeminiTransportResponse(text=text, usage=usage)
+        diagnostics = _extract_response_diagnostics(response)
+        for usage_key in (
+            "candidates_token_count",
+            "total_token_count",
+            "thoughts_token_count",
+        ):
+            usage_value = usage.get(usage_key)
+            if usage_value is not None:
+                diagnostics[f"usage_{usage_key}"] = usage_value
+        return GeminiTransportResponse(
+            text=text,
+            usage=usage,
+            diagnostics=diagnostics,
+        )
+
+
+
+def _extract_response_text(response: Any) -> str:
+    """Return generated text, with a conservative candidate-part fallback.
+
+    The Google SDK normally exposes joined text through ``response.text``. A small
+    manual fallback is useful for SDK edge cases where textual candidate parts are
+    present but the convenience property is empty. Only literal text parts are
+    joined; non-text parts are ignored.
+    """
+    try:
+        text: Any = getattr(response, "text", None)
+    except Exception:
+        text = None
+    if isinstance(text, str) and text.strip():
+        return text
+
+    recovered: list[str] = []
+    candidates: Any = getattr(response, "candidates", None)
+    if not isinstance(candidates, (list, tuple)):
+        return text if isinstance(text, str) else ""
+
+    for candidate in candidates:
+        content: Any = getattr(candidate, "content", None)
+        parts: Any = getattr(content, "parts", None)
+        if not isinstance(parts, (list, tuple)):
+            continue
+        for part in parts:
+            part_text: Any = getattr(part, "text", None)
+            if isinstance(part_text, str) and part_text:
+                recovered.append(part_text)
+    return "".join(recovered)
+
+
+def _extract_response_diagnostics(response: Any) -> dict[str, object]:
+    """Return provider-safe metadata that explains an empty Gemini response."""
+    diagnostics: dict[str, object] = {}
+
+    candidates: Any = getattr(response, "candidates", None)
+    if isinstance(candidates, (list, tuple)):
+        diagnostics["candidate_count"] = len(candidates)
+        finish_reasons: list[str] = []
+        part_counts: list[int] = []
+        safety_summaries: list[str] = []
+        for candidate in candidates:
+            finish_reason = _diagnostic_scalar(
+                getattr(candidate, "finish_reason", None)
+            )
+            if finish_reason is not None:
+                finish_reasons.append(finish_reason)
+
+            content: Any = getattr(candidate, "content", None)
+            parts: Any = getattr(content, "parts", None)
+            if isinstance(parts, (list, tuple)):
+                part_counts.append(len(parts))
+
+            ratings: Any = getattr(candidate, "safety_ratings", None)
+            summary = _summarize_safety_ratings(ratings)
+            if summary:
+                safety_summaries.append(summary)
+
+        if finish_reasons:
+            diagnostics["finish_reasons"] = tuple(finish_reasons)
+        if part_counts:
+            diagnostics["candidate_part_counts"] = tuple(part_counts)
+        if safety_summaries:
+            diagnostics["candidate_safety"] = tuple(safety_summaries)
+
+    prompt_feedback: Any = getattr(response, "prompt_feedback", None)
+    if prompt_feedback is not None:
+        block_reason = _diagnostic_scalar(
+            getattr(prompt_feedback, "block_reason", None)
+        )
+        if block_reason is not None:
+            diagnostics["prompt_block_reason"] = block_reason
+
+        block_reason_message = _diagnostic_scalar(
+            getattr(prompt_feedback, "block_reason_message", None)
+        )
+        if block_reason_message is not None:
+            diagnostics["prompt_block_message"] = block_reason_message
+
+        prompt_safety = _summarize_safety_ratings(
+            getattr(prompt_feedback, "safety_ratings", None)
+        )
+        if prompt_safety:
+            diagnostics["prompt_safety"] = prompt_safety
+
+    return diagnostics
+
+
+def _summarize_safety_ratings(ratings: Any) -> str | None:
+    """Return a compact category/probability summary without prompt content."""
+    if not isinstance(ratings, (list, tuple)):
+        return None
+    items: list[str] = []
+    for rating in ratings:
+        category = _diagnostic_scalar(getattr(rating, "category", None))
+        probability = _diagnostic_scalar(getattr(rating, "probability", None))
+        blocked = getattr(rating, "blocked", None)
+        if category is None and probability is None and not isinstance(blocked, bool):
+            continue
+        fields = [value for value in (category, probability) if value is not None]
+        item = ":".join(fields) if fields else "safety"
+        if isinstance(blocked, bool):
+            item = f"{item}:blocked={str(blocked).lower()}"
+        items.append(item)
+    return ",".join(items) if items else None
+
+
+def _diagnostic_scalar(value: Any) -> str | None:
+    """Convert one SDK enum/scalar into a stable short diagnostic string."""
+    if value is None:
+        return None
+    for attribute in ("value", "name"):
+        nested = getattr(value, attribute, None)
+        if isinstance(nested, (str, int, float)) and not isinstance(nested, bool):
+            text = str(nested).strip()
+            if text:
+                return text
+    if isinstance(value, (str, int, float)) and not isinstance(value, bool):
+        text = str(value).strip()
+        return text or None
+    text = str(value).strip()
+    return text or None
+
+
+def _format_empty_response_diagnostics(diagnostics: dict[str, object]) -> str:
+    """Format selected empty-response metadata for CLI-safe exception text."""
+    if not diagnostics:
+        return ""
+    ordered_keys = (
+        "candidate_count",
+        "finish_reasons",
+        "candidate_part_counts",
+        "prompt_block_reason",
+        "prompt_block_message",
+        "candidate_safety",
+        "prompt_safety",
+        "usage_candidates_token_count",
+        "usage_thoughts_token_count",
+        "usage_total_token_count",
+    )
+    items: list[str] = []
+    for key in ordered_keys:
+        if key not in diagnostics:
+            continue
+        value = diagnostics[key]
+        if isinstance(value, tuple):
+            rendered = ",".join(str(item) for item in value)
+        else:
+            rendered = str(value)
+        if rendered:
+            items.append(f"{key}={rendered}")
+    return "; ".join(items)
 
 
 def _normalize_request_error(error: Exception) -> GeminiRequestError:

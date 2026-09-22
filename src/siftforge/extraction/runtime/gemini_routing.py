@@ -24,6 +24,12 @@ class GeminiFailureClassifier:
                 continue_routing=False,
             )
         if isinstance(error, InvalidGeminiResponseError):
+            if error.is_recitation:
+                return FailureDecision(
+                    kind=FailureKind.RECITATION,
+                    retryable=False,
+                    continue_routing=False,
+                )
             return FailureDecision(
                 kind=FailureKind.INVALID_OUTPUT,
                 retryable=True,

@@ -15,13 +15,20 @@ from siftforge.ebook.extraction import (
 from siftforge.extraction.artifacts import FilesystemArtifactStore
 from siftforge.extraction.materializers import PDFPageMaterializer
 from siftforge.extraction.models import (
+    Attempt,
     ExtractionResult,
     ExtractionTask,
     MaterializedAsset,
     SourceRef,
 )
-from siftforge.extraction.providers import Extractor
+from siftforge.extraction.providers import (
+    Extractor,
+    InvalidGeminiResponseError,
+)
+from siftforge.extraction.runtime import ExtractionRoutingError, FailureKind
 from siftforge.extraction.sources import PDFSource
+
+from .recitation_recovery import RecitationOcrRecovery
 
 
 @dataclass(frozen=True, slots=True)
@@ -33,6 +40,7 @@ class EbookPageEvidenceExtractionRun:
     extraction: ExtractionResult
     page_evidence: PageExtraction
     run_dir: Path
+    recovery: str | None = None
 
 
 class EbookPDFPageEvidenceExtractionService:
@@ -47,11 +55,19 @@ class EbookPDFPageEvidenceExtractionService:
         self,
         extractor: Extractor,
         normalizer: EbookPageEvidenceNormalizer | None = None,
+        *,
+        recitation_ocr_fallback: bool = True,
+        recitation_ocr_language: str = "auto",
+        recitation_recovery: RecitationOcrRecovery | None = None,
     ) -> None:
-        """Initialize the service without selecting provider/model policy."""
+        """Initialize extraction plus conservative RECITATION recovery policy."""
         self._extractor: Extractor = extractor
         self._normalizer: EbookPageEvidenceNormalizer = (
             normalizer or EbookPageEvidenceNormalizer()
+        )
+        self._recitation_ocr_fallback = recitation_ocr_fallback
+        self._recitation_recovery = recitation_recovery or RecitationOcrRecovery(
+            language=recitation_ocr_language
         )
 
     def extract_page(
@@ -117,7 +133,40 @@ class EbookPDFPageEvidenceExtractionService:
                 "output_model": "PageExtraction",
             },
         )
-        extraction = self._extractor.extract(task)
+        try:
+            extraction = self._extractor.extract(task)
+        except (ExtractionRoutingError, InvalidGeminiResponseError) as exc:
+            if not self._recitation_ocr_fallback or not _is_recitation_failure(exc):
+                raise
+            recovery = self._recitation_recovery.recover(
+                source=source_ref,
+                asset=asset,
+                run_dir=run_path,
+            )
+            attempts = _failed_attempts_for_recitation(exc) + (recovery.attempt,)
+            extraction = ExtractionResult(
+                task=task,
+                raw_data=recovery.raw_text,
+                normalized_data=None,
+                attempts=attempts,
+            )
+            self._write_recovery_artifacts(
+                store=artifact_store,
+                source=source_ref,
+                asset=asset,
+                extraction=extraction,
+                page_evidence=recovery.page,
+                recovery_language=recovery.language,
+            )
+            return EbookPageEvidenceExtractionRun(
+                source=source_ref,
+                asset=asset,
+                extraction=extraction,
+                page_evidence=recovery.page,
+                run_dir=run_path,
+                recovery="local_ocr_recitation",
+            )
+
         page_evidence = self._normalizer.normalize(
             page_id=source_ref.source_id,
             source=source_ref,
@@ -139,6 +188,74 @@ class EbookPDFPageEvidenceExtractionService:
             page_evidence=page_evidence,
             run_dir=run_path,
         )
+
+    def _write_recovery_artifacts(
+        self,
+        *,
+        store: FilesystemArtifactStore,
+        source: SourceRef,
+        asset: MaterializedAsset,
+        extraction: ExtractionResult,
+        page_evidence: PageExtraction,
+        recovery_language: str,
+    ) -> None:
+        """Persist local-OCR recovery without pretending it is Gemini output."""
+        store.write_text("raw/local-ocr.txt", str(extraction.raw_data))
+        store.write_json(
+            "normalized/page.json",
+            self._normalizer.to_dict(page_evidence),
+        )
+        manifest: dict[str, Any] = {
+            "source": {
+                "source_id": source.source_id,
+                "uri": source.uri,
+                "sha256": source.sha256,
+                "media_type": source.media_type,
+                "page_number": source.metadata.get("page_number"),
+                "document_sha256": source.metadata.get("document_sha256"),
+            },
+            "asset": {
+                "path": str(asset.path.relative_to(store.root)),
+                "media_type": asset.media_type,
+                "sha256": asset.sha256,
+                "byte_size": asset.byte_size,
+                "preserved_encoded_source": asset.metadata.get(
+                    "preserved_encoded_source"
+                ),
+            },
+            "prompt": {
+                "name": extraction.task.prompt.name,
+                "version": extraction.task.prompt.version,
+            },
+            "schema": {
+                "name": extraction.task.schema.name,
+                "version": extraction.task.schema.version,
+            },
+            "normalization": {
+                "model": "PageExtraction",
+                "status": "recovered",
+                "recovery": "local_ocr_recitation",
+                "needs_review": True,
+            },
+            "recovery": {
+                "reason": "gemini_recitation",
+                "mechanism": "local_ocr",
+                "provider": "tesseract",
+                "language": recovery_language,
+                "needs_review": True,
+            },
+            "attempts": [
+                {
+                    "mechanism": attempt.mechanism,
+                    "provider": attempt.provider,
+                    "status": attempt.status,
+                    "reason": attempt.reason,
+                    "metadata": attempt.metadata,
+                }
+                for attempt in extraction.attempts
+            ],
+        }
+        store.write_json("manifest.json", manifest)
 
     @staticmethod
     def _find_page(pdf_source: PDFSource, page_number: int) -> SourceRef:
@@ -213,3 +330,39 @@ class EbookPDFPageEvidenceExtractionService:
             ],
         }
         store.write_json("manifest.json", manifest)
+
+
+def _is_recitation_failure(error: Exception) -> bool:
+    """Return whether the terminal Gemini generation reason is RECITATION."""
+    if isinstance(error, InvalidGeminiResponseError):
+        return error.is_recitation
+    if isinstance(error, ExtractionRoutingError):
+        if any(
+            attempt.reason == FailureKind.RECITATION.value
+            for attempt in error.attempts
+        ):
+            return True
+        last = error.last_error
+        return isinstance(last, InvalidGeminiResponseError) and last.is_recitation
+    return False
+
+
+def _failed_attempts_for_recitation(error: Exception) -> tuple[Attempt, ...]:
+    """Return provider attempts that led to local OCR recovery."""
+    if isinstance(error, ExtractionRoutingError):
+        return error.attempts
+    if isinstance(error, InvalidGeminiResponseError):
+        return (
+            Attempt(
+                mechanism="ai",
+                provider="gemini",
+                status="failed",
+                reason=FailureKind.RECITATION.value,
+                metadata={
+                    "error_type": type(error).__name__,
+                    "retryable": False,
+                    "continue_routing": False,
+                },
+            ),
+        )
+    return ()

@@ -53,6 +53,7 @@ class EbookBookPageExtractionResult:
     attempts: tuple[Attempt, ...] = ()
     error_type: str | None = None
     error_message: str | None = None
+    recovery: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -98,6 +99,11 @@ class EbookBookExtractionRun:
             for item in self.page_results
         )
 
+    @property
+    def recovered_count(self) -> int:
+        """Return pages recovered through a non-Gemini fallback mechanism."""
+        return sum(item.recovery is not None for item in self.page_results)
+
 
 ProgressCallback = Callable[[EbookBookExtractionProgress], None]
 
@@ -120,12 +126,17 @@ class EbookPDFBookEvidenceExtractionService:
         extractor: Extractor,
         normalizer: EbookPageEvidenceNormalizer | None = None,
         page_loader: EbookPageRunLoader | None = None,
+        *,
+        recitation_ocr_fallback: bool = True,
+        recitation_ocr_language: str = "auto",
     ) -> None:
         """Initialize reusable collaborators without selecting a PDF yet."""
         self._normalizer = normalizer or EbookPageEvidenceNormalizer()
         self._page_service = EbookPDFPageEvidenceExtractionService(
             extractor,
             self._normalizer,
+            recitation_ocr_fallback=recitation_ocr_fallback,
+            recitation_ocr_language=recitation_ocr_language,
         )
         self._page_loader = page_loader or EbookPageRunLoader()
 
@@ -189,6 +200,7 @@ class EbookPDFBookEvidenceExtractionService:
                     run_dir=run_dir,
                     usage=usage,
                     attempts=_load_page_attempts(run_dir),
+                    recovery=_load_page_recovery(run_dir),
                 )
             else:
                 staging_dir = root / f".page-{page_number:04d}.extracting"
@@ -246,6 +258,7 @@ class EbookPDFBookEvidenceExtractionService:
                     run_dir=run_dir,
                     usage=usage,
                     attempts=_load_page_attempts(run_dir),
+                    recovery=_load_page_recovery(run_dir),
                 )
 
             results.append(result)
@@ -358,7 +371,9 @@ class EbookPDFBookEvidenceExtractionService:
         ):
             return False
         if model is not None and _successful_model(manifest) != model:
-            return False
+            recovery = _manifest_value(manifest, "normalization", "recovery")
+            if recovery != "local_ocr_recitation":
+                return False
         return True
 
     def _write_manifest(
@@ -416,6 +431,7 @@ class EbookPDFBookEvidenceExtractionService:
                     ],
                     "error_type": item.error_type,
                     "error_message": item.error_message,
+                    "recovery": item.recovery,
                 }
                 for item in results
             ],
@@ -523,6 +539,16 @@ def _successful_model(manifest: dict[str, Any]) -> str | None:
         if isinstance(model, str) and model:
             return model
     return None
+
+
+def _load_page_recovery(run_dir: Path) -> str | None:
+    """Return the recovery strategy recorded by one canonical page manifest."""
+    try:
+        manifest = _load_json_object(run_dir / "manifest.json")
+    except (OSError, ValueError, json.JSONDecodeError):
+        return None
+    value = _manifest_value(manifest, "normalization", "recovery")
+    return value if isinstance(value, str) and value else None
 
 
 def _load_page_attempts(run_dir: Path) -> tuple[Attempt, ...]:
@@ -665,5 +691,6 @@ def _summary(
         "failed": sum(
             item.status is EbookBookPageStatus.FAILED for item in results
         ),
+        "recovered": sum(item.recovery is not None for item in results),
         "remaining": selected_count - len(results),
     }

@@ -1258,6 +1258,47 @@ permission errors, or invalid requests stop whole-book extraction even when
 from causing hundreds of pointless page requests; the checkpoint remains safe to
 resume later with the same command.
 
+### RECITATION recovery with local OCR
+
+Gemini can occasionally return an empty structured response with
+`finish_reason=RECITATION` when exact transcription resembles memorized or
+otherwise protected text. SiftForge treats this as a terminal Gemini generation
+reason: it does not retry the same Gemini route or spend another paid attempt on
+the same page.
+
+For active v5 page extraction, the default recovery path uses local Tesseract OCR
+to keep the book complete. The recovered canonical page is explicitly marked as
+review-required in both `normalized/page.json` warnings and `manifest.json`:
+
+```text
+normalization.status   = recovered
+normalization.recovery = local_ocr_recitation
+normalization.needs_review = true
+```
+
+The raw OCR text is stored as `raw/local-ocr.txt`. Typography and fine semantic
+structure are intentionally conservative because local OCR is an emergency text
+recovery mechanism, not a replacement for Gemini page evidence. Human proofing
+should verify every recovered page against its source image.
+
+By default, `--recitation-ocr-language auto` prefers the dominant language of the
+nearest already-extracted sibling page and maps common ISO codes such as `vi` to
+Tesseract's `vie`. An explicit language can be supplied when needed:
+
+```bash
+siftforge ebook extract-page \
+  --pdf 18-nam-kim-cuong.pdf \
+  --page 32 \
+  --model gemini-3.6-flash \
+  --routing-policy free-then-paid \
+  --recitation-ocr-language vie
+```
+
+Use `--no-recitation-ocr-fallback` when a workflow must fail instead of creating
+a local-OCR recovery artifact. Whole-book progress and summaries report recovered
+pages separately from failed pages. Recovered canonical runs are reusable on the
+next resume; use `--force` when intentionally retrying them with Gemini.
+
 ## Milestone 1G-8 - EPUB reader compatibility hardening
 
 The EPUB renderer now writes multiple XHTML spine documents instead of forcing

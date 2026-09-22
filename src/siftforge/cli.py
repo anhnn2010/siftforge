@@ -31,6 +31,7 @@ from siftforge.ebook.pipeline import (
     EbookEpubReadyService,
     EbookEpubValidationError,
     EbookProofError,
+    RecitationOcrRecoveryError,
     EbookProofService,
     EbookEpubValidationService,
     EbookPDFBookEvidenceExtractionService,
@@ -117,6 +118,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="Artifact directory. Defaults to runs/<pdf-stem>/page-NNNN.",
     )
     _add_gemini_routing_arguments(extract_page)
+    _add_recitation_recovery_arguments(extract_page)
 
     extract_metadata = ebook_actions.add_parser(
         "extract-metadata",
@@ -196,6 +198,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="Record failed pages and continue instead of stopping immediately.",
     )
     _add_gemini_routing_arguments(extract_book)
+    _add_recitation_recovery_arguments(extract_book)
 
 
     convert_pdf = ebook_actions.add_parser(
@@ -326,6 +329,7 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     _add_gemini_routing_arguments(convert_pdf)
+    _add_recitation_recovery_arguments(convert_pdf)
 
     review_text = ebook_actions.add_parser(
         "review-text",
@@ -770,6 +774,26 @@ def _add_gemini_routing_arguments(parser: argparse.ArgumentParser) -> None:
     )
 
 
+def _add_recitation_recovery_arguments(parser: argparse.ArgumentParser) -> None:
+    """Add conservative local-OCR fallback controls for Gemini RECITATION."""
+    parser.add_argument(
+        "--recitation-ocr-language",
+        default="auto",
+        help=(
+            "Tesseract language used only when Gemini stops with RECITATION. "
+            "Defaults to auto, which prefers nearby extracted-page language."
+        ),
+    )
+    parser.add_argument(
+        "--no-recitation-ocr-fallback",
+        action="store_true",
+        help=(
+            "Disable automatic local OCR recovery when Gemini stops with "
+            "RECITATION."
+        ),
+    )
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     """Run the SiftForge command-line interface.
 
@@ -1014,6 +1038,8 @@ def _run_ebook_extract_page(args: argparse.Namespace) -> int:
             pdf_path=pdf_path,
             page_number=args.page,
             run_dir=run_dir,
+            recitation_ocr_fallback=not args.no_recitation_ocr_fallback,
+            recitation_ocr_language=args.recitation_ocr_language,
         )
     except (
         FileNotFoundError,
@@ -1022,8 +1048,9 @@ def _run_ebook_extract_page(args: argparse.Namespace) -> int:
         GeminiProviderError,
         ExtractionRoutingError,
         EbookPageNormalizationError,
+        RecitationOcrRecoveryError,
     ) as exc:
-        print(f"error: {exc}", file=sys.stderr)
+        _print_extraction_error(exc)
         return 2
 
 
@@ -1033,9 +1060,15 @@ def _run_ebook_extract_page_v5(
     pdf_path: Path,
     page_number: int,
     run_dir: Path,
+    recitation_ocr_fallback: bool,
+    recitation_ocr_language: str,
 ) -> int:
     """Run the active v5 page-evidence extraction path."""
-    service = EbookPDFPageEvidenceExtractionService(provider)
+    service = EbookPDFPageEvidenceExtractionService(
+        provider,
+        recitation_ocr_fallback=recitation_ocr_fallback,
+        recitation_ocr_language=recitation_ocr_language,
+    )
     run = service.extract_page(
         pdf_path=pdf_path,
         page_number=page_number,
@@ -1048,6 +1081,9 @@ def _run_ebook_extract_page_v5(
     print("contract: v5 page evidence (prompt 5.2)")
     print(f"kind:     {run.page_evidence.page_kind_hint.value}")
     print(f"blocks:   {len(run.page_evidence.blocks)}")
+    if run.recovery is not None:
+        print(f"recovery: {run.recovery}")
+        print("review:   REQUIRED - verify OCR text, structure, and typography")
     print("result: typed page evidence saved to normalized/page.json")
     return 0
 
@@ -1093,16 +1129,21 @@ def _run_ebook_extract_book(args: argparse.Namespace) -> int:
     except ValueError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
-    service = EbookPDFBookEvidenceExtractionService(provider)
+    service = EbookPDFBookEvidenceExtractionService(
+        provider,
+        recitation_ocr_fallback=not args.no_recitation_ocr_fallback,
+        recitation_ocr_language=args.recitation_ocr_language,
+    )
 
     def print_progress(progress: EbookBookExtractionProgress) -> None:
         """Print one compact line after each selected physical page."""
         result = progress.result
-        suffix = (
-            f" - {result.error_type}: {result.error_message}"
-            if result.error_message
-            else ""
-        )
+        if result.error_message:
+            suffix = f" - {result.error_type}: {result.error_message}"
+        elif result.recovery is not None:
+            suffix = f" - recovery={result.recovery}; review required"
+        else:
+            suffix = ""
         print(
             f"[{progress.completed}/{progress.total}] "
             f"page {result.page_number:04d} {result.status.value}{suffix}"
@@ -1126,6 +1167,7 @@ def _run_ebook_extract_book(args: argparse.Namespace) -> int:
     print(f"runs:      {run.runs_root}")
     print(f"extracted: {run.extracted_count}")
     print(f"reused:    {run.reused_count}")
+    print(f"recovered: {run.recovered_count}")
     print(f"failed:    {run.failed_count}")
     print(f"manifest:  {run.manifest_path}")
     if run.total_usage:
@@ -1167,16 +1209,25 @@ def _run_ebook_convert_pdf(args: argparse.Namespace) -> int:
     except ValueError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
-    service = EbookPdfToEpubService(provider)
+    extraction_service = EbookPDFBookEvidenceExtractionService(
+        provider,
+        recitation_ocr_fallback=not args.no_recitation_ocr_fallback,
+        recitation_ocr_language=args.recitation_ocr_language,
+    )
+    service = EbookPdfToEpubService(
+        provider,
+        extraction_service=extraction_service,
+    )
 
     def print_progress(progress: EbookBookExtractionProgress) -> None:
         """Print one compact extraction line per physical PDF page."""
         result = progress.result
-        suffix = (
-            f" - {result.error_type}: {result.error_message}"
-            if result.error_message
-            else ""
-        )
+        if result.error_message:
+            suffix = f" - {result.error_type}: {result.error_message}"
+        elif result.recovery is not None:
+            suffix = f" - recovery={result.recovery}; review required"
+        else:
+            suffix = ""
         print(
             f"[{progress.completed}/{progress.total}] "
             f"page {result.page_number:04d} {result.status.value}{suffix}"
@@ -1213,6 +1264,7 @@ def _run_ebook_convert_pdf(args: argparse.Namespace) -> int:
     print(f"runs:       {run.runs_root}")
     print(f"extracted:  {extraction.extracted_count}")
     print(f"reused:     {extraction.reused_count}")
+    print(f"recovered:  {extraction.recovered_count}")
     print(f"failed:     {extraction.failed_count}")
     if extraction.total_usage:
         total_tokens = extraction.total_usage.get("total_token_count")

@@ -146,3 +146,128 @@ def test_v5_service_writes_typed_page_evidence(tmp_path: Path) -> None:
     assert manifest["prompt"]["version"] == "5.2"
     assert manifest["schema"]["version"] == "5"
     assert manifest["normalization"]["model"] == "PageExtraction"
+
+
+def test_v5_service_recovers_recitation_with_local_ocr(tmp_path: Path) -> None:
+    """RECITATION should create a review-required canonical page via local OCR."""
+    from siftforge.ebook.evidence import (
+        BlockRoleHint,
+        HeadingRoleHint,
+        PageBlockEvidence,
+        PageExtraction,
+        SourceTypography,
+        TextSpanEvidence,
+        build_block_id,
+        build_span_id,
+    )
+    from siftforge.ebook.models import (
+        CapsStyle,
+        FontPosture,
+        FontWeight,
+        PageKind,
+        VerticalPosition,
+    )
+    from siftforge.ebook.pipeline.recitation_recovery import (
+        RecitationOcrRecoveryResult,
+    )
+    from siftforge.extraction.models import Attempt, MaterializedAsset, SourceRef
+    from siftforge.extraction.providers import InvalidGeminiResponseError
+    from siftforge.extraction.runtime import ExtractionRoutingError, FailureKind
+
+    class RecitationExtractor:
+        """Raise one routed RECITATION failure without making a network call."""
+
+        def extract(self, task: ExtractionTask) -> ExtractionResult:
+            error = InvalidGeminiResponseError(
+                "Gemini returned an empty response",
+                diagnostics={"finish_reasons": ("RECITATION",)},
+            )
+            attempt = Attempt(
+                mechanism="ai",
+                provider="gemini",
+                status="failed",
+                reason=FailureKind.RECITATION.value,
+                metadata={"route": "gemini-paid"},
+            )
+            raise ExtractionRoutingError(
+                "recitation",
+                attempts=(attempt,),
+                last_error=error,
+            )
+
+    class FakeRecovery:
+        """Return deterministic local OCR evidence for service orchestration."""
+
+        def recover(
+            self,
+            *,
+            source: SourceRef,
+            asset: MaterializedAsset,
+            run_dir: Path,
+        ) -> RecitationOcrRecoveryResult:
+            block_id = build_block_id(source.source_id, 0)
+            typography = SourceTypography(
+                posture=FontPosture.UNKNOWN,
+                weight=FontWeight.UNKNOWN,
+                vertical_position=VerticalPosition.UNKNOWN,
+                caps_style=CapsStyle.UNKNOWN,
+                decorations=(),
+            )
+            page = PageExtraction(
+                page_id=source.source_id,
+                source=source,
+                page_kind_hint=PageKind.TEXT,
+                dominant_language="vi",
+                printed_page_number=None,
+                blocks=(
+                    PageBlockEvidence(
+                        block_id=block_id,
+                        sequence_index=0,
+                        role_hint=BlockRoleHint.PARAGRAPH,
+                        spans=(
+                            TextSpanEvidence(
+                                span_id=build_span_id(block_id, 0),
+                                text="Ca dao được OCR cục bộ.",
+                                language="vi",
+                                source_typography=typography,
+                            ),
+                        ),
+                        dominant_language="vi",
+                        heading_role_hint=HeadingRoleHint.UNKNOWN,
+                    ),
+                ),
+                warnings=("review required",),
+            )
+            return RecitationOcrRecoveryResult(
+                page=page,
+                raw_text="Ca dao được OCR cục bộ.",
+                language="vie",
+                attempt=Attempt(
+                    mechanism="ocr",
+                    provider="tesseract",
+                    status="success",
+                    reason="recitation_recovery",
+                    metadata={"needs_review": True},
+                ),
+            )
+
+    pdf_path = tmp_path / "book.pdf"
+    _make_pdf(pdf_path)
+    run_dir = tmp_path / "page-0001"
+    service = EbookPDFPageEvidenceExtractionService(
+        RecitationExtractor(),
+        recitation_recovery=FakeRecovery(),  # type: ignore[arg-type]
+    )
+
+    run = service.extract_page(pdf_path, page_number=1, run_dir=run_dir)
+
+    assert run.recovery == "local_ocr_recitation"
+    assert run.page_evidence.blocks[0].text == "Ca dao được OCR cục bộ."
+    assert (run_dir / "raw" / "local-ocr.txt").read_text(encoding="utf-8") == (
+        "Ca dao được OCR cục bộ."
+    )
+    manifest = json.loads((run_dir / "manifest.json").read_text(encoding="utf-8"))
+    assert manifest["normalization"]["status"] == "recovered"
+    assert manifest["normalization"]["needs_review"] is True
+    assert manifest["recovery"]["reason"] == "gemini_recitation"
+    assert manifest["attempts"][-1]["provider"] == "tesseract"

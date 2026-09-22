@@ -166,6 +166,7 @@ def test_extract_book_reuses_matching_page_runs(tmp_path: Path) -> None:
         "completed": 3,
         "extracted": 0,
         "failed": 0,
+        "recovered": 0,
         "remaining": 0,
         "reused": 3,
         "selected": 3,

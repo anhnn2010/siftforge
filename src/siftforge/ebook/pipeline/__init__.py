@@ -45,6 +45,7 @@ from .pdf_to_epub import (
     EbookPdfToEpubRun,
     EbookPdfToEpubService,
 )
+from .recitation_recovery import RecitationOcrRecoveryError
 from .proof import (
     EbookProofError,
     EbookProofRun,
@@ -72,6 +73,7 @@ __all__: list[str] = [
     "EbookPageEvidenceExtractionRun",
     "EbookPageExtractionRun",
     "EbookProofError",
+    "RecitationOcrRecoveryError",
     "EbookProofRun",
     "EbookProofService",
     "EbookProofStatus",

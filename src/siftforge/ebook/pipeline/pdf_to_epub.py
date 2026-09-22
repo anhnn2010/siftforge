@@ -231,6 +231,7 @@ def _write_conversion_manifest(
             "pages": len(extraction.page_results),
             "extracted": extraction.extracted_count,
             "reused": extraction.reused_count,
+            "recovered": extraction.recovered_count,
             "failed": extraction.failed_count,
             "usage": extraction.total_usage,
         },

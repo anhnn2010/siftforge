@@ -270,3 +270,28 @@ def test_free_only_router_rejects_paid_only_configuration() -> None:
             (_route("paid", paid, CostTier.PAID),),
             policy=RoutingPolicy.FREE_ONLY,
         )
+
+
+def test_recitation_is_terminal_for_gemini_routes() -> None:
+    """RECITATION should skip same-route retries and later Gemini routes."""
+    recitation = InvalidGeminiResponseError(
+        "Gemini returned an empty response",
+        diagnostics={"finish_reasons": ("RECITATION",)},
+    )
+    free = ScriptedExtractor([recitation])
+    paid = ScriptedExtractor([_success("paid", CostTier.PAID)])
+    router = FreeFirstRouter(
+        (
+            _route("free", free, CostTier.FREE, max_attempts=3),
+            _route("paid", paid, CostTier.PAID, max_attempts=2),
+        ),
+        policy=RoutingPolicy.FREE_THEN_PAID,
+        sleep=lambda _: None,
+    )
+
+    with pytest.raises(ExtractionRoutingError) as caught:
+        router.extract(_task())
+
+    assert free.calls == 1
+    assert paid.calls == 0
+    assert caught.value.attempts[-1].reason == FailureKind.RECITATION.value

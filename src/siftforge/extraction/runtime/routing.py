@@ -27,6 +27,7 @@ class FailureKind(StrEnum):
     RATE_LIMIT = "rate_limit"
     QUOTA_EXHAUSTED = "quota_exhausted"
     INVALID_OUTPUT = "invalid_output"
+    RECITATION = "recitation"
     AUTHENTICATION = "authentication"
     PERMISSION = "permission"
     INVALID_REQUEST = "invalid_request"

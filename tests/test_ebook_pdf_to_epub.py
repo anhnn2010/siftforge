@@ -28,6 +28,7 @@ class FakeExtractionRun:
     failed_count: int
     extracted_count: int = 0
     reused_count: int = 0
+    recovered_count: int = 0
     total_usage: dict[str, int] | None = None
 
     def __post_init__(self) -> None:
