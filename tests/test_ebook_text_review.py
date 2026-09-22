@@ -197,6 +197,8 @@ def test_html_report_highlights_review_context(tmp_path: Path) -> None:
     assert "Use suggestion" in rendered
     assert "Export resolutions.json" in rendered
     assert "siftforge-text-review-resolutions" in rendered
+    assert 'JSON.stringify(payload, null, 2) + "\\n"' in rendered
+    assert "setTimeout(() => URL.revokeObjectURL(url), 1000)" in rendered
 
 
 class _FakeLoader:

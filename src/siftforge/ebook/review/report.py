@@ -217,14 +217,18 @@ function exportResolutions() {{
     version: REVIEW_VERSION,
     resolutions,
   }};
-  const blob = new Blob([JSON.stringify(payload, null, 2) + "\n"],
+  const blob = new Blob([JSON.stringify(payload, null, 2) + "\\n"],
     {{type: "application/json"}});
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
   anchor.href = url;
   anchor.download = "siftforge-review-resolutions.json";
+  document.body.appendChild(anchor);
   anchor.click();
-  URL.revokeObjectURL(url);
+  anchor.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  document.getElementById("resolution-status").textContent =
+    `${{resolutions.length}} decision(s) exported`;
 }}
 document.addEventListener("change", saveState);
 document.addEventListener("input", saveState);
