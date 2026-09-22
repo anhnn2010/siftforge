@@ -10,6 +10,218 @@ The first real application is scanned-book/PDF → structured book → EPUB.
 SiftForge targets **Python 3.12.x**, with **Python 3.12.3** as the official
 local-development and CI baseline.
 
+
+## Quick workflow: scanned PDF to final human-proofed EPUB
+
+This is the recommended end-to-end workflow for a real book. The detailed
+milestone sections later in this README explain each command and artifact; use
+this section as the day-to-day cheat sheet.
+
+```text
+PDF
+ ↓
+extract-book                         machine extraction
+ ↓
+runs/<book>/page-NNNN/normalized/page.json
+ ↓
+extract-metadata                     metadata + cover
+ ↓
+review-text                          Gemini text ↔ local OCR
+ ↓
+review/report.html                   HUMAN REVIEW #1: suspicious findings
+ ↓
+export siftforge-review-resolutions.json
+ ↓
+import-review                        creates page-local corrections.json
+ ↓
+review-status                        optional audit / strict review check
+ ↓
+build-epub                           applies corrections, builds structure/XHTML
+ ↓
+<book>-build/epub-ready/             machine-owned / regeneratable
+ ↓
+prepare-proof                        freeze generated XHTML once
+ ↓
+<book>-build/proof/                  HUMAN REVIEW #2: final proofreading
+ ↓
+package-epub --proof                 package the human-edited master
+ ↓
+dist/<book>.epub                     final distribution copy
+```
+
+### 1. Extract the whole book
+
+```bash
+siftforge ebook extract-book \
+  --pdf 18-nam-kim-cuong.pdf \
+  --model gemini-3.6-flash \
+  --runs-root runs/18-nam-kim-cuong \
+  --routing-policy free-then-paid
+```
+
+The run is resumable. Existing valid page extractions are reused. When Gemini
+stops a page with `RECITATION`, the default recovery path uses local Tesseract
+OCR and marks that page `needs_review=true`; these recovered pages deserve extra
+human attention.
+
+To audit pages that still have no normalized extraction:
+
+```bash
+PDF="18-nam-kim-cuong.pdf"
+RUN="runs/18-nam-kim-cuong"
+TOTAL=$(pdfinfo "$PDF" | awk '/^Pages:/ {print $2}')
+for n in $(seq 1 "$TOTAL"); do
+  page_dir=$(printf "%s/page-%04d" "$RUN" "$n")
+  [ -f "$page_dir/normalized/page.json" ] || printf "page-%04d\n" "$n"
+done
+```
+
+### 2. Extract and review book metadata / cover
+
+```bash
+siftforge ebook extract-metadata \
+  --pdf 18-nam-kim-cuong.pdf \
+  --model gemini-3.6-flash \
+  --routing-policy free-then-paid
+```
+
+Review or edit:
+
+```text
+runs/18-nam-kim-cuong/metadata.json
+runs/18-nam-kim-cuong/cover.jpg
+```
+
+`metadata.json` is intentionally human-editable.
+
+### 3. Compare extracted text with local OCR
+
+Use a Tesseract language that is installed locally. For a Vietnamese-only
+installation:
+
+```bash
+siftforge ebook review-text \
+  --runs-root runs/18-nam-kim-cuong \
+  --ocr-language vie
+```
+
+The command prints live progress. When it finishes, open:
+
+```bash
+xdg-open runs/18-nam-kim-cuong/review/report.html
+```
+
+`report.html` is HUMAN REVIEW #1. Resolve actionable findings with **Keep
+source**, **Use OCR**, **Use suggestion**, or **Manual**, then export
+`siftforge-review-resolutions.json` from the report.
+
+### 4. Import the review decisions
+
+```bash
+siftforge ebook import-review \
+  --runs-root runs/18-nam-kim-cuong \
+  --resolutions ~/Downloads/siftforge-review-resolutions.json
+```
+
+This creates page-local artifacts such as:
+
+```text
+page-NNNN/review/resolutions.json
+page-NNNN/review/corrections.json
+```
+
+`corrections.json` is an internal build overlay. Normally do not edit or manage
+it by hand. `build-epub` automatically applies it on top of immutable
+`normalized/page.json`.
+
+Optional review audit:
+
+```bash
+siftforge ebook review-status \
+  --runs-root runs/18-nam-kim-cuong
+```
+
+### 5. Build the generated EPUB/XHTML
+
+```bash
+siftforge ebook build-epub \
+  --runs-root runs/18-nam-kim-cuong \
+  --output dist/18-nam-kim-cuong.epub
+```
+
+This consumes normalized extraction + imported corrections + metadata, performs
+book-level structure analysis, semantic projection, and EPUB rendering. The
+important generated workspace is:
+
+```text
+runs/18-nam-kim-cuong-build/epub-ready/
+```
+
+`epub-ready/` is machine-owned and safe to regenerate. Do not treat manual edits
+there as permanent.
+
+For a release-quality build that must have a complete review state, add:
+
+```text
+--require-reviewed
+```
+
+### 6. Create the human proofreading master
+
+After the generated XHTML looks structurally correct, create the proof workspace
+once:
+
+```bash
+siftforge ebook prepare-proof \
+  --epub-ready runs/18-nam-kim-cuong-build/epub-ready \
+  --output runs/18-nam-kim-cuong-build/proof
+```
+
+From this point, HUMAN REVIEW #2 happens in:
+
+```text
+runs/18-nam-kim-cuong-build/proof/text/chapter-XXXX.xhtml
+```
+
+This is the official final editable text layer. Use it for typos or formatting
+problems discovered while reading the book that were not caught by OCR compare.
+The proof directory is human-owned and is not overwritten unless
+`prepare-proof --force` is explicitly requested.
+
+### 7. Package the final EPUB from proof
+
+Once proof editing has started, do **not** use `build-epub` as the source of the
+final distribution copy. Package directly from the human-edited proof workspace:
+
+```bash
+siftforge ebook package-epub \
+  --proof runs/18-nam-kim-cuong-build/proof \
+  --output dist/18-nam-kim-cuong.epub
+```
+
+The source-of-truth distinction is:
+
+```text
+--runs-root  → machine pipeline; regenerates derived XHTML
+--proof      → human-final pipeline; packages final proofreading edits
+```
+
+### Files a normal user should care about
+
+| File / directory | Purpose | Edit by hand? |
+|---|---|---|
+| `review/report.html` | Review machine-detected text concerns | Yes, through the HTML UI |
+| `metadata.json` | Title, author, publisher, ISBN, cover reference, etc. | Yes |
+| `proof/text/*.xhtml` | Final human proofreading master | Yes |
+| `normalized/page.json` | Canonical extraction evidence | No |
+| `review/corrections.json` | Imported machine-readable correction overlay | No |
+| `epub-ready/` | Generated XHTML/package workspace | No; regenerate instead |
+| `dist/*.epub` | Final distribution artifact | No |
+
+In short: **review in `report.html`, edit metadata in `metadata.json`, and do final
+free-form proofreading in `proof/text/*.xhtml`.** Everything else is primarily a
+machine artifact or diagnostic trail.
+
 ## Milestone 1E-r1 - Explicit typography state
 
 A real page-18 smoke test showed why an empty formatting-mark list is ambiguous:
