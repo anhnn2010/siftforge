@@ -149,6 +149,24 @@ siftforge ebook build-epub \
   --output dist/18-nam-kim-cuong.epub
 ```
 
+If the scanned PDF contains printed pages that should not appear in the final
+EPUB, such as a legacy printed table of contents, exclude them by their
+**one-based physical PDF page numbers**:
+
+```bash
+siftforge ebook build-epub \
+  --runs-root runs/18-nam-kim-cuong \
+  --exclude-pages 7-10,14 \
+  --output dist/18-nam-kim-cuong.epub
+```
+
+Exclusion is non-destructive: the corresponding `page-NNNN/` extraction and
+review artifacts remain under `runs/`. They are simply omitted from book
+assembly, XHTML, and the packaged EPUB. SiftForge also refuses unknown page
+numbers instead of silently accepting a typo. Cross-page continuation analysis
+still uses physical PDF page provenance, so excluding a gap cannot accidentally
+join text across nonconsecutive pages.
+
 This consumes normalized extraction + imported corrections + metadata, performs
 book-level structure analysis, semantic projection, and EPUB rendering. The
 important generated workspace is:
@@ -1201,6 +1219,22 @@ runs/
 ```
 
 A custom workspace can be selected with `--work-dir`.
+
+Printed front matter or other unwanted physical pages can be omitted at build
+time without deleting source evidence:
+
+```bash
+siftforge ebook build-epub \
+  --runs-root runs/18-nam-kim-cuong \
+  --exclude-pages 7-10,14 \
+  --output dist/18-nam-kim-cuong.epub
+```
+
+`--exclude-pages` accepts comma-separated one-based PDF page numbers and
+inclusive ranges. The exclusion is recorded in both
+`assembly/manifest.json` and `build-manifest.json`. When `--require-reviewed`
+is also enabled, excluded pages do not participate in the strict review gate,
+because they are not part of the final EPUB.
 
 EPUBCheck remains optional and external. To include it in the same command:
 

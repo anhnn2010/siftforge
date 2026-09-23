@@ -8,10 +8,11 @@ import zipfile
 from pathlib import Path
 from typing import Any
 
+import pytest
 from PIL import Image
 
 from siftforge.ebook.extraction import EbookPageEvidenceNormalizer
-from siftforge.ebook.pipeline import EbookBuildService
+from siftforge.ebook.pipeline import EbookBuildError, EbookBuildService
 from siftforge.extraction.models import SourceRef
 
 
@@ -132,6 +133,106 @@ def test_build_epub_rebuilds_derived_stages_from_page_runs(tmp_path: Path) -> No
     assert manifest["policy"] == "clean-derived-stages"
     assert manifest["stages"]["assembly"]["pages"] == 1
     assert manifest["stages"]["epubcheck"]["requested"] is False
+
+
+def test_build_epub_excludes_selected_physical_pages(tmp_path: Path) -> None:
+    """Excluded source pages should remain in runs but not enter the EPUB."""
+    runs = tmp_path / "runs" / "book"
+    runs.mkdir(parents=True)
+    _write_page_run(runs, 1, "Trang mở đầu.")
+    _write_page_run(runs, 2, "Mục lục in sẵn.")
+    _write_page_run(runs, 3, "Nội dung chương một.")
+    output = tmp_path / "dist" / "book.epub"
+    work = tmp_path / "work"
+
+    run = EbookBuildService().build(
+        runs,
+        output,
+        title="Sách thử",
+        language="vi",
+        work_dir=work,
+        modified="2026-09-23T10:00:00Z",
+        exclude_page_numbers=(2,),
+    )
+
+    assert (runs / "page-0002" / "normalized" / "page.json").is_file()
+    assert [page.page_number for page in run.assembly.page_runs] == [1, 3]
+    assert run.assembly.excluded_page_numbers == (2,)
+    with zipfile.ZipFile(output) as archive:
+        content = archive.read("EPUB/text/content.xhtml").decode("utf-8")
+    assert "Trang mở đầu." in content
+    assert "Nội dung chương một." in content
+    assert "Mục lục in sẵn." not in content
+
+    assembly_manifest = json.loads(
+        (work / "assembly" / "manifest.json").read_text(encoding="utf-8")
+    )
+    assert assembly_manifest["excluded_pages"] == [2]
+    build_manifest = json.loads(run.manifest_path.read_text(encoding="utf-8"))
+    assert build_manifest["excluded_pages"] == [2]
+    assert build_manifest["stages"]["assembly"]["pages"] == 2
+
+
+def test_build_epub_does_not_bridge_continuations_across_excluded_gap(
+    tmp_path: Path,
+) -> None:
+    """Filtering a middle page must not make nonconsecutive pages adjacent."""
+    runs = tmp_path / "runs" / "book"
+    runs.mkdir(parents=True)
+    _write_page_run(runs, 1, "Một câu đang dở")
+    _write_page_run(runs, 2, "Mục lục in sẵn.")
+    _write_page_run(runs, 3, "tiếp tục ở trang sau.")
+
+    run = EbookBuildService().build(
+        runs,
+        tmp_path / "book.epub",
+        title="Sách thử",
+        work_dir=tmp_path / "work",
+        exclude_page_numbers=(2,),
+    )
+
+    assert run.assembly.analysis.resolved_continuations == ()
+
+
+def test_require_reviewed_ignores_pages_excluded_from_build(tmp_path: Path) -> None:
+    """Strict review gating should cover only pages entering the final EPUB."""
+    runs = tmp_path / "runs" / "book"
+    runs.mkdir(parents=True)
+    _write_page_run(runs, 1, "Nội dung chính.")
+    _write_page_run(runs, 2, "Mục lục in sẵn.")
+    review_dir = runs / "page-0001" / "review"
+    review_dir.mkdir()
+    (review_dir / "findings.json").write_text(
+        json.dumps({"findings": []}),
+        encoding="utf-8",
+    )
+
+    run = EbookBuildService().build(
+        runs,
+        tmp_path / "book.epub",
+        title="Sách thử",
+        work_dir=tmp_path / "work",
+        exclude_page_numbers=(2,),
+        require_reviewed=True,
+    )
+
+    assert [page.page_number for page in run.assembly.page_runs] == [1]
+
+
+def test_build_epub_rejects_unavailable_excluded_page(tmp_path: Path) -> None:
+    """A typo in page exclusions should fail instead of being ignored."""
+    runs = tmp_path / "runs" / "book"
+    runs.mkdir(parents=True)
+    _write_page_run(runs, 1, "Nội dung.")
+
+    with pytest.raises(EbookBuildError, match="excluded pages are not available"):
+        EbookBuildService().build(
+            runs,
+            tmp_path / "book.epub",
+            title="Sách thử",
+            work_dir=tmp_path / "work",
+            exclude_page_numbers=(99,),
+        )
 
 
 def test_build_epub_can_run_optional_epubcheck(

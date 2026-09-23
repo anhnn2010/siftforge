@@ -302,6 +302,8 @@ def test_build_epub_parser_accepts_end_to_end_options() -> None:
             "vi",
             "--author",
             "Hồ Thị Hải Âu",
+            "--exclude-pages",
+            "7-10,14",
             "--work-dir",
             "runs/book-build",
             "--validate",
@@ -315,9 +317,31 @@ def test_build_epub_parser_accepts_end_to_end_options() -> None:
     assert args.title == "18 Năm Kim Cương"
     assert args.language == "vi"
     assert args.author == "Hồ Thị Hải Âu"
+    assert args.exclude_pages == "7-10,14"
     assert args.work_dir == Path("runs/book-build")
     assert args.validate is True
     assert args.epubcheck_jar == Path("tools/epubcheck.jar")
+
+
+def test_build_epub_rejects_invalid_exclude_page_range(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Malformed physical-page ranges should fail before build discovery."""
+    status = main(
+        [
+            "ebook",
+            "build-epub",
+            "--runs-root",
+            "runs/book",
+            "--output",
+            "dist/book.epub",
+            "--exclude-pages",
+            "10-7",
+        ]
+    )
+
+    assert status == 2
+    assert "invalid --exclude-pages" in capsys.readouterr().err
 
 def test_validate_epub_parser_accepts_external_tool_configuration() -> None:
     """EPUBCheck validation should remain an explicit provider-free stage."""

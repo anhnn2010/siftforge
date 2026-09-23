@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 import shutil
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -87,6 +88,7 @@ class EbookBuildService:
         timeout_seconds: float = 120.0,
         report_path: str | Path | None = None,
         require_reviewed: bool = False,
+        exclude_page_numbers: Sequence[int] = (),
     ) -> EbookBuildRun:
         """Build one EPUB from existing page runs without calling a provider.
 
@@ -114,6 +116,8 @@ class EbookBuildService:
             report_path: Optional EPUBCheck JSON report destination.
             require_reviewed: Fail unless every page has a current complete
                 text-fidelity review.
+            exclude_page_numbers: One-based physical PDF pages kept in the
+                canonical runs but omitted from final book assembly.
 
         Returns:
             Typed results for every completed build stage.
@@ -169,12 +173,19 @@ class EbookBuildService:
 
         if require_reviewed:
             try:
-                ReviewStatusService().require_complete(runs)
+                ReviewStatusService().require_complete(
+                    runs,
+                    exclude_page_numbers=exclude_page_numbers,
+                )
             except ReviewStatusError as exc:
                 raise EbookBuildError(str(exc)) from exc
 
         try:
-            assembly = self._assembly.assemble(runs, assembly_dir)
+            assembly = self._assembly.assemble(
+                runs,
+                assembly_dir,
+                exclude_page_numbers=exclude_page_numbers,
+            )
             epub_ready = self._epub_ready.build(
                 assembly_dir,
                 epub_ready_dir,
@@ -303,10 +314,12 @@ def _write_build_manifest(
         "output_epub": str(output_path),
         "metadata": book_metadata_to_dict(metadata),
         "cover": str(cover_path) if cover_path is not None else None,
+        "excluded_pages": list(assembly.excluded_page_numbers),
         "stages": {
             "assembly": {
                 "output": "assembly",
                 "pages": len(assembly.page_runs),
+                "excluded_pages": list(assembly.excluded_page_numbers),
                 "nodes": len(assembly.document.nodes),
                 "figures": len(assembly.figure_assets),
             },

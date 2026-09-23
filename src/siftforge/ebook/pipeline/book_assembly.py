@@ -48,6 +48,7 @@ class EbookBookAssemblyRun:
     """Artifacts and typed structure produced by multi-page book assembly."""
 
     page_runs: tuple[EbookPageRunArtifact, ...]
+    excluded_page_numbers: tuple[int, ...]
     analysis: StructuralAnalysisResult
     document: BookDocument
     figure_assets: tuple[FigureAsset, ...]
@@ -158,16 +159,45 @@ class EbookBookAssemblyService:
         self,
         runs_root: str | Path,
         output_dir: str | Path,
+        *,
+        exclude_page_numbers: Sequence[int] = (),
     ) -> EbookBookAssemblyRun:
-        """Assemble persisted page runs without making any provider calls."""
+        """Assemble selected persisted page runs without provider calls.
+
+        Args:
+            runs_root: Directory containing canonical page extraction runs.
+            output_dir: Destination for derived assembly artifacts.
+            exclude_page_numbers: One-based physical PDF pages to retain in the
+                source runs but omit from logical book assembly.
+
+        Returns:
+            Assembly artifacts for included pages only.
+
+        Raises:
+            EbookBookAssemblyError: If exclusion configuration is invalid,
+                references unavailable pages, or removes every page.
+        """
         raw_page_runs = self._loader.discover(runs_root)
+        excluded_page_numbers = _validate_excluded_page_numbers(
+            exclude_page_numbers,
+            raw_page_runs,
+        )
+        selected_page_runs = tuple(
+            page_run
+            for page_run in raw_page_runs
+            if page_run.page_number not in excluded_page_numbers
+        )
+        if not selected_page_runs:
+            raise EbookBookAssemblyError(
+                "page exclusions remove every available page from the book"
+            )
         try:
             page_runs = tuple(
                 replace(
                     page_run,
                     page=_load_effective_page(page_run),
                 )
-                for page_run in raw_page_runs
+                for page_run in selected_page_runs
             )
         except (OSError, ValueError, TextCorrectionError) as exc:
             raise EbookBookAssemblyError(
@@ -200,11 +230,13 @@ class EbookBookAssemblyService:
         self._write_artifacts(
             output=output,
             page_runs=page_runs,
+            excluded_page_numbers=excluded_page_numbers,
             analysis=updated_analysis,
             figure_assets=figure_assets,
         )
         return EbookBookAssemblyRun(
             page_runs=page_runs,
+            excluded_page_numbers=excluded_page_numbers,
             analysis=updated_analysis,
             document=document,
             figure_assets=figure_assets,
@@ -216,6 +248,7 @@ class EbookBookAssemblyService:
         *,
         output: Path,
         page_runs: Sequence[EbookPageRunArtifact],
+        excluded_page_numbers: Sequence[int],
         analysis: StructuralAnalysisResult,
         figure_assets: Sequence[FigureAsset],
     ) -> None:
@@ -269,6 +302,7 @@ class EbookBookAssemblyService:
             "manifest.json",
             {
                 "assembly_model": "BookDocument",
+                "excluded_pages": list(excluded_page_numbers),
                 "pages": [
                     {
                         "page_number": item.page_number,
@@ -293,6 +327,30 @@ class EbookBookAssemblyService:
                 ],
             },
         )
+
+
+def _validate_excluded_page_numbers(
+    values: Sequence[int],
+    page_runs: Sequence[EbookPageRunArtifact],
+) -> tuple[int, ...]:
+    """Validate page exclusions against discovered canonical page runs."""
+    excluded: set[int] = set()
+    for value in values:
+        if isinstance(value, bool) or not isinstance(value, int) or value < 1:
+            raise EbookBookAssemblyError(
+                "excluded page numbers must be positive integers"
+            )
+        excluded.add(value)
+
+    available = {page_run.page_number for page_run in page_runs}
+    missing = sorted(excluded - available)
+    if missing:
+        rendered = ", ".join(str(page_number) for page_number in missing)
+        raise EbookBookAssemblyError(
+            "excluded pages are not available as canonical page runs: "
+            f"{rendered}"
+        )
+    return tuple(sorted(excluded))
 
 
 def _load_effective_page(page_run: EbookPageRunArtifact) -> PageExtraction:

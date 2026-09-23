@@ -608,6 +608,14 @@ def build_parser() -> argparse.ArgumentParser:
         help="Destination final .epub file.",
     )
     build_epub.add_argument(
+        "--exclude-pages",
+        default=None,
+        help=(
+            "Comma-separated one-based physical PDF pages/ranges to omit from "
+            "the EPUB while keeping their source runs, for example 7-10,14."
+        ),
+    )
+    build_epub.add_argument(
         "--title",
         default=None,
         help=(
@@ -1608,6 +1616,11 @@ def _run_ebook_build_epub(args: argparse.Namespace) -> int:
     """Build a final EPUB from page runs through all provider-free stages."""
     runs_root = args.runs_root.expanduser().resolve()
     output = args.output.expanduser().resolve()
+    try:
+        exclude_page_numbers = _parse_page_number_ranges(args.exclude_pages)
+    except ValueError as exc:
+        print(f"error: invalid --exclude-pages: {exc}", file=sys.stderr)
+        return 2
     jar_value = args.epubcheck_jar
     if args.validate and jar_value is None:
         env_value = os.getenv("EPUBCHECK_JAR")
@@ -1644,12 +1657,18 @@ def _run_ebook_build_epub(args: argparse.Namespace) -> int:
             timeout_seconds=args.timeout,
             report_path=args.epubcheck_report,
             require_reviewed=args.require_reviewed,
+            exclude_page_numbers=exclude_page_numbers,
         )
     except EbookBuildError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
 
     print(f"pages:      {len(run.assembly.page_runs)}")
+    if run.assembly.excluded_page_numbers:
+        excluded = _format_page_number_ranges(
+            run.assembly.excluded_page_numbers
+        )
+        print(f"excluded:   {excluded}")
     print(f"nodes:      {len(run.assembly.document.nodes)}")
     print(f"figures:    {len(run.assembly.figure_assets)}")
     print(f"assets:     {run.epub_ready.asset_count}")
@@ -1748,6 +1767,63 @@ def _run_ebook_evaluate_golden(args: argparse.Namespace) -> int:
         print(f"report: {output}")
 
     return 0 if report.passed else 1
+
+
+def _parse_page_number_ranges(value: str | None) -> tuple[int, ...]:
+    """Parse comma-separated one-based page numbers and inclusive ranges."""
+    if value is None or not value.strip():
+        return ()
+
+    pages: set[int] = set()
+    for raw_token in value.split(","):
+        token = raw_token.strip()
+        if not token:
+            raise ValueError("empty page token")
+        if "-" not in token:
+            page_number = _parse_positive_page_number(token)
+            pages.add(page_number)
+            continue
+        if token.count("-") != 1:
+            raise ValueError(f"invalid page range: {token!r}")
+        raw_start, raw_end = (part.strip() for part in token.split("-", 1))
+        start = _parse_positive_page_number(raw_start)
+        end = _parse_positive_page_number(raw_end)
+        if end < start:
+            raise ValueError(
+                f"page range end must be >= start: {token!r}"
+            )
+        pages.update(range(start, end + 1))
+    return tuple(sorted(pages))
+
+
+def _parse_positive_page_number(value: str) -> int:
+    """Parse one positive physical PDF page number."""
+    if not value.isdigit():
+        raise ValueError(f"page number must be a positive integer: {value!r}")
+    page_number = int(value)
+    if page_number < 1:
+        raise ValueError(f"page number must be >= 1: {value!r}")
+    return page_number
+
+
+def _format_page_number_ranges(page_numbers: Sequence[int]) -> str:
+    """Render sorted physical page numbers as compact inclusive ranges."""
+    ordered = sorted(set(page_numbers))
+    if not ordered:
+        return ""
+
+    ranges: list[str] = []
+    start = ordered[0]
+    end = start
+    for page_number in ordered[1:]:
+        if page_number == end + 1:
+            end = page_number
+            continue
+        ranges.append(str(start) if start == end else f"{start}-{end}")
+        start = page_number
+        end = page_number
+    ranges.append(str(start) if start == end else f"{start}-{end}")
+    return ",".join(ranges)
 
 
 if __name__ == "__main__":

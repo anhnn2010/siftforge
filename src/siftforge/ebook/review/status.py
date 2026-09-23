@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Sequence
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
@@ -96,16 +97,34 @@ class ReviewStatusService:
         """Initialize with the canonical page-run loader by default."""
         self._loader = loader or EbookPageRunLoader()
 
-    def inspect(self, runs_root: str | Path) -> ReviewStatus:
-        """Return page-level review status and detect stale review snapshots."""
+    def inspect(
+        self,
+        runs_root: str | Path,
+        *,
+        exclude_page_numbers: Sequence[int] = (),
+    ) -> ReviewStatus:
+        """Return review status for pages included in the requested build."""
         root = Path(runs_root).expanduser().resolve()
         page_runs = self._loader.discover(root)
-        pages = tuple(self._inspect_page(page_run) for page_run in page_runs)
+        excluded = _normalize_excluded_page_numbers(exclude_page_numbers)
+        pages = tuple(
+            self._inspect_page(page_run)
+            for page_run in page_runs
+            if page_run.page_number not in excluded
+        )
         return ReviewStatus(runs_root=root, pages=pages)
 
-    def require_complete(self, runs_root: str | Path) -> ReviewStatus:
-        """Fail when any canonical page still lacks a complete current review."""
-        status = self.inspect(runs_root)
+    def require_complete(
+        self,
+        runs_root: str | Path,
+        *,
+        exclude_page_numbers: Sequence[int] = (),
+    ) -> ReviewStatus:
+        """Fail when any included page lacks a complete current review."""
+        status = self.inspect(
+            runs_root,
+            exclude_page_numbers=exclude_page_numbers,
+        )
         if status.complete:
             return status
         counts = ", ".join(
@@ -192,6 +211,18 @@ class ReviewStatusService:
             resolved_count=len(resolved_ids),
             unresolved_count=len(unresolved),
         )
+
+
+def _normalize_excluded_page_numbers(values: Sequence[int]) -> frozenset[int]:
+    """Return validated physical page numbers omitted from review gating."""
+    excluded: set[int] = set()
+    for value in values:
+        if isinstance(value, bool) or not isinstance(value, int) or value < 1:
+            raise ReviewStatusError(
+                "excluded page numbers must be positive integers"
+            )
+        excluded.add(value)
+    return frozenset(excluded)
 
 
 def review_status_to_dict(status: ReviewStatus) -> dict[str, Any]:
