@@ -323,11 +323,66 @@ def test_renderer_outputs_verse_lines_as_semantic_line_elements(
     )
     xhtml = result.content_path.read_text(encoding="utf-8")
 
-    assert '<blockquote class="verse" id="verse-1">' in xhtml
+    assert '<div class="verse" id="verse-1">' in xhtml
+    assert '<p class="verse-line" id="line-1">Dòng một</p>' in xhtml
+    assert '<p class="verse-line" id="line-2">Dòng hai</p>' in xhtml
     assert xhtml.count('class="verse-line"') == 2
-    assert xhtml.count("<br />") == 1
-    assert "Dòng một" in xhtml
-    assert "Dòng hai" in xhtml
+    assert "<br />" not in xhtml
+
+
+def test_renderer_preserves_italic_in_separate_verse_paragraphs(
+    tmp_path: Path,
+) -> None:
+    """Italic verse lines should stay separate TTS-friendly paragraphs."""
+    document = SemanticBookDocument(
+        title="Book",
+        language="vi",
+        author=None,
+        nodes=(
+            SemanticVerse(
+                node_id="verse-1",
+                lines=(
+                    SemanticVerseLine(
+                        node_id="line-1",
+                        content=(
+                            _inline(
+                                "“Có vàng, vàng chẳng hay phô",
+                                presentations=(InlinePresentation.ITALIC,),
+                            ),
+                        ),
+                    ),
+                    SemanticVerseLine(
+                        node_id="line-2",
+                        content=(
+                            _inline(
+                                "Có con, con nói trầm trồ mẹ nghe.”",
+                                presentations=(InlinePresentation.ITALIC,),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        ),
+    )
+
+    result = EpubReadyXhtmlRenderer().render(
+        document,
+        asset_root=tmp_path,
+        output_root=tmp_path / "out",
+    )
+    xhtml = result.content_path.read_text(encoding="utf-8")
+    css = result.stylesheet_path.read_text(encoding="utf-8")
+
+    assert (
+        '<p class="verse-line" id="line-1"><span class="source-italic">'
+        '“Có vàng, vàng chẳng hay phô</span></p>'
+    ) in xhtml
+    assert (
+        '<p class="verse-line" id="line-2"><span class="source-italic">'
+        'Có con, con nói trầm trồ mẹ nghe.”</span></p>'
+    ) in xhtml
+    assert "<br />" not in xhtml
+    assert ".verse-line {\n  margin: 0;\n}" in css
 
 
 def test_renderer_links_footnote_reference_to_footnote_body(tmp_path: Path) -> None:

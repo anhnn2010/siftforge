@@ -666,21 +666,19 @@ def _render_verse(
     *,
     context: _RenderContext,
 ) -> str:
-    """Render verse with explicit semantic line breaks that survive reflow."""
-    lines: list[str] = []
-    for index, line in enumerate(node.lines):
-        suffix = "<br />" if index < len(node.lines) - 1 else ""
-        lines.append(
-            f'{indent}    <span class="verse-line" '
+    """Render each verse line as its own paragraph for natural TTS pauses."""
+    lines = [
+        (
+            f'{indent}  <p class="verse-line" '
             f'id="{_attr(line.node_id)}">'
-            f"{_render_inlines(line.content, context=context)}</span>{suffix}"
+            f"{_render_inlines(line.content, context=context)}</p>"
         )
+        for line in node.lines
+    ]
     return (
-        f'{indent}<blockquote class="verse" id="{_attr(node.node_id)}">\n'
-        f"{indent}  <p>\n"
+        f'{indent}<div class="verse" id="{_attr(node.node_id)}">\n'
         + "\n".join(lines)
-        + f"\n{indent}  </p>\n"
-        f"{indent}</blockquote>"
+        + f"\n{indent}</div>"
     )
 
 
@@ -935,7 +933,7 @@ figcaption,
   margin: 1em 0 1em 2em;
 }
 .verse-line {
-  display: inline;
+  margin: 0;
 }
 .inset {
   margin: 1.5em 0;
