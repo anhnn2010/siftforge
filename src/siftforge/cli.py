@@ -22,6 +22,8 @@ from siftforge.ebook.extraction import EbookPageNormalizationError
 from siftforge.ebook.pipeline import (
     EbookBookAssemblyError,
     EbookBookAssemblyService,
+    EbookBookBackupError,
+    EbookBookBackupService,
     EbookBookExtractionError,
     EbookBookExtractionProgress,
     EbookBuildError,
@@ -31,15 +33,15 @@ from siftforge.ebook.pipeline import (
     EbookEpubReadyError,
     EbookEpubReadyService,
     EbookEpubValidationError,
-    EbookProofError,
-    RecitationOcrRecoveryError,
-    EbookProofService,
     EbookEpubValidationService,
+    EbookProofError,
+    EbookProofService,
     EbookPDFBookEvidenceExtractionService,
     EbookPDFPageEvidenceExtractionService,
     EbookPDFPageExtractionService,
     EbookPdfToEpubError,
     EbookPdfToEpubService,
+    RecitationOcrRecoveryError,
 )
 from siftforge.ebook.review import (
     EbookTextReviewService,
@@ -553,6 +555,32 @@ def build_parser() -> argparse.ArgumentParser:
         help="Explicitly replace an existing proof workspace and human edits.",
     )
 
+    backup_book = ebook_actions.add_parser(
+        "backup-book",
+        help=(
+            "Synchronize proof, metadata, and review decisions into a compact "
+            "Git-friendly book backup directory."
+        ),
+    )
+    backup_book.add_argument(
+        "--runs-root",
+        required=True,
+        type=Path,
+        help="Canonical page-run directory containing metadata and review state.",
+    )
+    backup_book.add_argument(
+        "--proof",
+        required=True,
+        type=Path,
+        help="Human-owned proof workspace created by prepare-proof.",
+    )
+    backup_book.add_argument(
+        "--output",
+        required=True,
+        type=Path,
+        help="Git-friendly destination directory to create or update.",
+    )
+
     package_epub = ebook_actions.add_parser(
         "package-epub",
         help="Package EPUB-ready or human-proofed XHTML into a final EPUB 3 file.",
@@ -842,6 +870,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _run_ebook_render_xhtml(args)
     if args.domain == "ebook" and args.action == "prepare-proof":
         return _run_ebook_prepare_proof(args)
+    if args.domain == "ebook" and args.action == "backup-book":
+        return _run_ebook_backup_book(args)
     if args.domain == "ebook" and args.action == "package-epub":
         return _run_ebook_package_epub(args)
     if args.domain == "ebook" and args.action == "build-epub":
@@ -1574,6 +1604,31 @@ def _run_ebook_prepare_proof(args: argparse.Namespace) -> int:
     print(f"editable:  {run.editable_count} XHTML files")
     print(f"manifest:  {run.manifest_path}")
     print("result: human-owned proof workspace prepared")
+    return 0
+
+
+def _run_ebook_backup_book(args: argparse.Namespace) -> int:
+    """Synchronize durable human book artifacts into a Git-friendly backup."""
+    runs_root = args.runs_root.expanduser().resolve()
+    proof = args.proof.expanduser().resolve()
+    output = args.output.expanduser().resolve()
+    try:
+        run = EbookBookBackupService().backup(runs_root, proof, output)
+    except EbookBookBackupError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+
+    print(f"backup:     {run.output_dir}")
+    print(f"proof:      {run.editable_count} XHTML files")
+    print(f"proof edits:{run.modified_count:>4} XHTML files")
+    print(f"metadata:   {'yes' if run.metadata_path is not None else 'no'}")
+    print(
+        "review:     "
+        f"{'yes' if run.review_resolutions_path is not None else 'no'}"
+    )
+    print(f"build info: {'yes' if run.build_info_path is not None else 'no'}")
+    print(f"manifest:   {run.manifest_path}")
+    print("result: Git-friendly book backup synchronized")
     return 0
 
 

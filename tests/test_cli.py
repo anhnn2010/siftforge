@@ -261,6 +261,27 @@ def test_render_xhtml_parser_accepts_assembly_metadata() -> None:
     assert args.author == "Hồ Thị Hải Âu"
 
 
+def test_backup_book_parser_accepts_git_friendly_destination() -> None:
+    """Book backups should expose runs, proof, and destination roots."""
+    parser = build_parser()
+    args = parser.parse_args(
+        [
+            "ebook",
+            "backup-book",
+            "--runs-root",
+            "runs/18-nam-kim-cuong",
+            "--proof",
+            "runs/18-nam-kim-cuong-build/proof",
+            "--output",
+            "../siftforge-books/18-nam-kim-cuong",
+        ]
+    )
+
+    assert args.runs_root == Path("runs/18-nam-kim-cuong")
+    assert args.proof == Path("runs/18-nam-kim-cuong-build/proof")
+    assert args.output == Path("../siftforge-books/18-nam-kim-cuong")
+
+
 def test_package_epub_parser_accepts_ready_root_and_metadata() -> None:
     """Final EPUB packaging should be a provider-free ebook CLI action."""
     parser = build_parser()

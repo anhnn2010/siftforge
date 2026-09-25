@@ -8,7 +8,7 @@ import json
 import re
 import uuid
 import zipfile
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path, PurePosixPath
 from typing import Any
@@ -32,10 +32,11 @@ class EpubPackageError(ValueError):
 
 @dataclass(frozen=True, slots=True)
 class EpubTocEntry:
-    """One flat navigation entry derived from a semantic heading."""
+    """One semantic navigation entry with an intended hierarchy level."""
 
     label: str
     target_id: str
+    level: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -44,7 +45,16 @@ class _ResolvedTocEntry:
 
     label: str
     target_id: str
+    level: int
     content_relative: PurePosixPath
+
+
+@dataclass(slots=True)
+class _TocTreeNode:
+    """Mutable internal node used while normalizing EPUB TOC hierarchy."""
+
+    entry: _ResolvedTocEntry
+    children: list["_TocTreeNode"] = field(default_factory=list)
 
 
 @dataclass(frozen=True, slots=True)
@@ -423,7 +433,13 @@ def _require_file(root: Path, relative: PurePosixPath) -> Path:
 
 
 def _collect_toc_entries(payload: dict[str, Any]) -> tuple[EpubTocEntry, ...]:
-    """Collect a flat TOC from semantic heading nodes in document order."""
+    """Collect semantic TOC entries in document order.
+
+    Only headings with an explicit structural navigation role are admitted.
+    ``unknown`` headings remain visible in the reading flow but are intentionally
+    excluded from navigation because they do not carry enough evidence to define
+    publication hierarchy.
+    """
     nodes = payload.get("nodes")
     if not isinstance(nodes, list):
         raise EpubPackageError("semantic document field 'nodes' must be a list")
@@ -435,7 +451,7 @@ def _collect_toc_entries(payload: dict[str, Any]) -> tuple[EpubTocEntry, ...]:
 def _collect_heading_nodes(
     nodes: list[Any], entries: list[EpubTocEntry]
 ) -> None:
-    """Recursively collect heading nodes from semantic containers."""
+    """Recursively collect structurally navigable heading nodes."""
     for node in nodes:
         if not isinstance(node, dict):
             raise EpubPackageError("semantic document nodes must be objects")
@@ -444,14 +460,22 @@ def _collect_heading_nodes(
             node_id = node.get("node_id")
             content = node.get("content")
             role = node.get("role")
+            level = node.get("level")
             if not isinstance(node_id, str) or not node_id:
                 raise EpubPackageError("semantic heading has invalid node_id")
             if not isinstance(role, str):
                 raise EpubPackageError("semantic heading has invalid role")
-            if _heading_role_is_navigable(role):
+            navigation_level = _heading_navigation_level(role, level)
+            if navigation_level is not None:
                 label = _semantic_navigation_text(content).strip()
                 if label:
-                    entries.append(EpubTocEntry(label=label, target_id=node_id))
+                    entries.append(
+                        EpubTocEntry(
+                            label=label,
+                            target_id=node_id,
+                            level=navigation_level,
+                        )
+                    )
         children = node.get("children")
         if children is not None:
             if not isinstance(children, list):
@@ -461,13 +485,28 @@ def _collect_heading_nodes(
             _collect_heading_nodes(children, entries)
 
 
-def _heading_role_is_navigable(role: str) -> bool:
-    """Return whether one semantic heading role belongs in the EPUB TOC.
+def _heading_navigation_level(role: str, level: Any) -> int | None:
+    """Return the EPUB navigation level for one semantic heading role.
 
-    Supporting labels such as subtitles are rendered in the reading flow but do not
-    represent navigation hierarchy by themselves.
+    Chapter/section/subsection roles are stronger hierarchy evidence than source
+    typography, so they map deterministically to levels 1/2/3. Scenario titles
+    retain a validated semantic heading level when available and otherwise behave
+    like a subsection. Supporting labels and unresolved headings are not standalone
+    navigation destinations.
     """
-    return role not in {"chapter_label", "subtitle", "genre_label"}
+    fixed_levels = {
+        "chapter_title": 1,
+        "section_title": 2,
+        "subsection_title": 3,
+    }
+    fixed = fixed_levels.get(role)
+    if fixed is not None:
+        return fixed
+    if role == "scenario_title":
+        if isinstance(level, int) and not isinstance(level, bool) and 1 <= level <= 6:
+            return level
+        return 3
+    return None
 
 
 def _semantic_navigation_text(value: Any) -> str:
@@ -550,6 +589,7 @@ def _resolve_toc_entries(
             _ResolvedTocEntry(
                 label=entry.label,
                 target_id=entry.target_id,
+                level=entry.level,
                 content_relative=content_relative,
             )
         )
@@ -822,6 +862,61 @@ def _render_package_opf(
     )
 
 
+def _build_toc_tree(
+    entries: tuple[_ResolvedTocEntry, ...],
+) -> tuple[_TocTreeNode, ...]:
+    """Normalize flat semantic levels into a valid nested TOC tree.
+
+    A heading cannot become deeper than one level below the nearest available
+    parent. This keeps malformed source jumps such as chapter -> subsection valid
+    without inventing empty navigation nodes.
+    """
+    roots: list[_TocTreeNode] = []
+    stack: list[_TocTreeNode] = []
+    for entry in entries:
+        requested_level = max(1, entry.level)
+        effective_level = min(requested_level, len(stack) + 1)
+        while len(stack) >= effective_level:
+            stack.pop()
+        node = _TocTreeNode(entry=entry)
+        if stack:
+            stack[-1].children.append(node)
+        else:
+            roots.append(node)
+        stack.append(node)
+    return tuple(roots)
+
+
+def _render_toc_tree(
+    entries: tuple[_ResolvedTocEntry, ...],
+    *,
+    indent: str,
+) -> str:
+    """Render resolved semantic TOC entries as nested XHTML list items."""
+    roots = _build_toc_tree(entries)
+    return "\n".join(_render_toc_node(node, indent=indent) for node in roots)
+
+
+def _render_toc_node(node: _TocTreeNode, *, indent: str) -> str:
+    """Render one nested EPUB navigation list item."""
+    entry = node.entry
+    href = f"{entry.content_relative.as_posix()}#{entry.target_id}"
+    anchor = f'<a href="{_attr(href)}">{_text(entry.label)}</a>'
+    if not node.children:
+        return f"{indent}<li>{anchor}</li>"
+    child_indent = f"{indent}    "
+    children = "\n".join(
+        _render_toc_node(child, indent=child_indent) for child in node.children
+    )
+    return (
+        f"{indent}<li>{anchor}\n"
+        f"{indent}  <ol>\n"
+        f"{children}\n"
+        f"{indent}  </ol>\n"
+        f"{indent}</li>"
+    )
+
+
 def _render_nav_xhtml(
     *,
     title: str,
@@ -832,16 +927,10 @@ def _render_nav_xhtml(
     entries: tuple[_ResolvedTocEntry, ...],
 ) -> str:
     """Render EPUB 3 TOC plus semantic landmarks navigation."""
-    items: list[str] = []
     if entries:
-        for entry in entries:
-            href = f"{entry.content_relative.as_posix()}#{entry.target_id}"
-            items.append(
-                f'        <li><a href="{_attr(href)}">'
-                f"{_text(entry.label)}</a></li>"
-            )
+        items = _render_toc_tree(entries, indent="        ")
     else:
-        items.append(
+        items = (
             f'        <li><a href="{_attr(default_content.as_posix())}">'
             f"{_text(title)}</a></li>"
         )
@@ -877,7 +966,7 @@ def _render_nav_xhtml(
         '    <nav epub:type="toc" id="toc">\n'
         f"      <h1>{_text(title)}</h1>\n"
         "      <ol>\n"
-        + "\n".join(items)
+        + items
         + "\n      </ol>\n"
         + "    </nav>\n"
         + '    <nav epub:type="landmarks" id="landmarks">\n'

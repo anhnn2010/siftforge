@@ -173,6 +173,160 @@ def test_navigation_uses_semantic_headings(tmp_path: Path) -> None:
 
 
 
+def test_navigation_builds_nested_semantic_hierarchy_and_excludes_unknown(
+    tmp_path: Path,
+) -> None:
+    """TOC should nest chapter/section/subsection and omit unresolved headings."""
+    ready = tmp_path / "ready"
+    _write_ready_fixture(ready)
+    content = ready / "text" / "content.xhtml"
+    content.write_text(
+        '<?xml version="1.0" encoding="utf-8"?>\n'
+        '<html xmlns="http://www.w3.org/1999/xhtml" '
+        'xmlns:epub="http://www.idpf.org/2007/ops" lang="vi">\n'
+        "  <head><title>Sách thử</title></head>\n"
+        "  <body>\n"
+        '    <h1 id="frontmatter">HỒ THỊ HẢI ÂU</h1>\n'
+        '    <h1 id="chapter-1">Chương một</h1>\n'
+        '    <h2 id="section-1">Phần một</h2>\n'
+        '    <h3 id="subsection-1">Mục nhỏ</h3>\n'
+        '    <h2 id="section-2">Phần hai</h2>\n'
+        '    <h1 id="chapter-2">Chương hai</h1>\n'
+        "  </body>\n"
+        "</html>\n",
+        encoding="utf-8",
+    )
+
+    def heading(node_id: str, role: str, label: str, level: int) -> dict[str, object]:
+        return {
+            "type": "heading",
+            "node_id": node_id,
+            "role": role,
+            "level": level,
+            "content": [
+                {
+                    "text": label,
+                    "language": "vi",
+                    "marks": [],
+                    "role": "text",
+                    "target_id": None,
+                    "source_span_id": f"span-{node_id}",
+                }
+            ],
+        }
+
+    semantic_path = ready / "semantic" / "document.json"
+    semantic = json.loads(semantic_path.read_text(encoding="utf-8"))
+    semantic["nodes"] = [
+        heading("frontmatter", "unknown", "HỒ THỊ HẢI ÂU", 1),
+        heading("chapter-1", "chapter_title", "Chương một", 4),
+        heading("section-1", "section_title", "Phần một", 1),
+        heading("subsection-1", "subsection_title", "Mục nhỏ", 1),
+        heading("section-2", "section_title", "Phần hai", 6),
+        heading("chapter-2", "chapter_title", "Chương hai", 2),
+    ]
+    semantic_path.write_text(
+        json.dumps(semantic, ensure_ascii=False),
+        encoding="utf-8",
+    )
+    output = tmp_path / "book.epub"
+
+    run = EbookEpubPackageService().build(
+        ready,
+        output,
+        modified="2026-09-25T03:00:00Z",
+    )
+
+    with zipfile.ZipFile(output) as archive:
+        nav = ElementTree.fromstring(archive.read("EPUB/nav.xhtml"))
+    ns = {"x": "http://www.w3.org/1999/xhtml"}
+    toc = nav.find(".//x:nav[@id='toc']", ns)
+    assert toc is not None
+    root_list = toc.find("x:ol", ns)
+    assert root_list is not None
+    root_items = root_list.findall("x:li", ns)
+    assert [item.findtext("x:a", namespaces=ns) for item in root_items] == [
+        "Chương một",
+        "Chương hai",
+    ]
+
+    chapter_children = root_items[0].find("x:ol", ns)
+    assert chapter_children is not None
+    sections = chapter_children.findall("x:li", ns)
+    assert [item.findtext("x:a", namespaces=ns) for item in sections] == [
+        "Phần một",
+        "Phần hai",
+    ]
+
+    subsection_list = sections[0].find("x:ol", ns)
+    assert subsection_list is not None
+    subsections = subsection_list.findall("x:li", ns)
+    assert [item.findtext("x:a", namespaces=ns) for item in subsections] == [
+        "Mục nhỏ"
+    ]
+    assert "HỒ THỊ HẢI ÂU" not in ElementTree.tostring(
+        toc, encoding="unicode"
+    )
+    assert run.package.toc_entry_count == 5
+
+
+def test_navigation_normalizes_missing_parent_levels(tmp_path: Path) -> None:
+    """A subsection without a section parent should remain valid navigation."""
+    ready = tmp_path / "ready"
+    _write_ready_fixture(ready)
+    content = ready / "text" / "content.xhtml"
+    content.write_text(
+        content.read_text(encoding="utf-8").replace(
+            "</body>", '<h3 id="subsection-1">Mục nhỏ</h3></body>'
+        ),
+        encoding="utf-8",
+    )
+    semantic_path = ready / "semantic" / "document.json"
+    semantic = json.loads(semantic_path.read_text(encoding="utf-8"))
+    semantic["nodes"].append(
+        {
+            "type": "heading",
+            "node_id": "subsection-1",
+            "role": "subsection_title",
+            "level": 3,
+            "content": [
+                {
+                    "text": "Mục nhỏ",
+                    "language": "vi",
+                    "marks": [],
+                    "role": "text",
+                    "target_id": None,
+                    "source_span_id": "span-subsection-1",
+                }
+            ],
+        }
+    )
+    semantic_path.write_text(
+        json.dumps(semantic, ensure_ascii=False),
+        encoding="utf-8",
+    )
+    output = tmp_path / "book.epub"
+
+    EbookEpubPackageService().build(
+        ready,
+        output,
+        modified="2026-09-25T03:00:00Z",
+    )
+
+    with zipfile.ZipFile(output) as archive:
+        nav = ElementTree.fromstring(archive.read("EPUB/nav.xhtml"))
+    ns = {"x": "http://www.w3.org/1999/xhtml"}
+    toc = nav.find(".//x:nav[@id='toc']", ns)
+    assert toc is not None
+    root_list = toc.find("x:ol", ns)
+    assert root_list is not None
+    chapter = root_list.find("x:li", ns)
+    assert chapter is not None
+    children = chapter.find("x:ol", ns)
+    assert children is not None
+    assert children.findtext("x:li/x:a", namespaces=ns) == "Mục nhỏ"
+
+
 def test_navigation_omits_footnote_references_from_heading_label(
     tmp_path: Path,
 ) -> None:

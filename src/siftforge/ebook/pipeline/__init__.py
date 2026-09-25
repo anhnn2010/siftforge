@@ -7,6 +7,11 @@ from .book_assembly import (
     EbookPageRunArtifact,
     EbookPageRunLoader,
 )
+from .book_backup import (
+    EbookBookBackupError,
+    EbookBookBackupRun,
+    EbookBookBackupService,
+)
 from .book_extraction import (
     EbookBookExtractionError,
     EbookBookExtractionProgress,
@@ -54,6 +59,9 @@ from .proof import (
 )
 
 __all__: list[str] = [
+    "EbookBookBackupError",
+    "EbookBookBackupRun",
+    "EbookBookBackupService",
     "EbookBookExtractionError",
     "EbookBookExtractionProgress",
     "EbookBookExtractionRun",

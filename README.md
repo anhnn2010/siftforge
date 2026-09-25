@@ -44,6 +44,8 @@ prepare-proof                        freeze generated XHTML once
  ↓
 <book>-build/proof/                  HUMAN REVIEW #2: final proofreading
  ↓
+backup-book                          sync durable book sources to Git workspace
+ ↓
 package-epub --proof                 package the human-edited master
  ↓
 dist/<book>.epub                     final distribution copy
@@ -206,7 +208,52 @@ problems discovered while reading the book that were not caught by OCR compare.
 The proof directory is human-owned and is not overwritten unless
 `prepare-proof --force` is explicitly requested.
 
-### 7. Package the final EPUB from proof
+### 7. Back up the human book master for Git
+
+Once a proof workspace exists, synchronize the durable human work into a compact
+Git-friendly directory:
+
+```bash
+siftforge ebook backup-book \
+  --runs-root runs/18-nam-kim-cuong \
+  --proof runs/18-nam-kim-cuong-build/proof \
+  --output ~/projects/siftforge-books/18-nam-kim-cuong
+```
+
+The destination can already be a Git working tree. Re-running the command updates
+only SiftForge-managed backup artifacts and preserves `.git` plus unrelated files
+such as personal notes. The backup contains:
+
+```text
+18-nam-kim-cuong/
+├── proof/                    # complete human-owned, packageable master
+├── metadata.json             # when present in runs root
+├── review/
+│   └── resolutions.json      # when review decisions were imported
+├── build-info.json           # portable build facts such as excluded pages
+└── backup-manifest.json      # compact backup inventory + edited XHTML list
+```
+
+Extraction caches, provider responses, local OCR caches, page diagnostics, and
+`epub-ready/` are intentionally not copied. They are either large or
+regeneratable and do not belong in the human-history Git repository. The final
+`.epub` is also omitted because Git tracks the XHTML sources much more usefully
+than repeated ZIP-format EPUB binaries.
+
+A typical history workflow is therefore:
+
+```bash
+cd ~/projects/siftforge-books/18-nam-kim-cuong
+git status
+git add .
+git commit -m "proof: update 18 nam kim cuong"
+git push
+```
+
+Run `backup-book` again after another proofreading session, then review the Git
+diff before committing.
+
+### 8. Package the final EPUB from proof
 
 Once proof editing has started, do **not** use `build-epub` as the source of the
 final distribution copy. Package directly from the human-edited proof workspace:
@@ -231,6 +278,7 @@ The source-of-truth distinction is:
 | `review/report.html` | Review machine-detected text concerns | Yes, through the HTML UI |
 | `metadata.json` | Title, author, publisher, ISBN, cover reference, etc. | Yes |
 | `proof/text/*.xhtml` | Final human proofreading master | Yes |
+| Git backup from `backup-book` | Durable history of proof + metadata + review decisions | Commit/push |
 | `normalized/page.json` | Canonical extraction evidence | No |
 | `review/corrections.json` | Imported machine-readable correction overlay | No |
 | `epub-ready/` | Generated XHTML/package workspace | No; regenerate instead |
@@ -2041,6 +2089,20 @@ siftforge ebook package-epub \
 edited XHTML files, and then uses the same structural EPUB packaging checks as
 the generated path. A later `build-epub` may safely regenerate `assembly/` and
 `epub-ready/`; it does not touch the sibling `proof/` directory.
+
+To preserve proof history outside the machine-generated run tree, sync it to a
+separate Git working directory:
+
+```bash
+siftforge ebook backup-book \
+  --runs-root runs/18-nam-kim-cuong \
+  --proof runs/18-nam-kim-cuong-build/proof \
+  --output ~/projects/siftforge-books/18-nam-kim-cuong
+```
+
+This command deliberately owns only `proof/`, `metadata.json`,
+`review/resolutions.json`, `build-info.json`, and `backup-manifest.json` under the
+destination. Existing `.git` state and unrelated user files are left intact.
 
 The intended ownership boundary is therefore:
 
